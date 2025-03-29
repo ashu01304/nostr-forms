@@ -12,6 +12,7 @@ import { V1DraftsController } from "../../containers/Drafts";
 import CreateForm from "../../containers/CreateFormNew";
 import { Dashboard } from "../../containers/Dashboard";
 import EditForm from "../../containers/EditForm";
+import LLMTestPage from '../../LLMTestPage'; // <- added to test LLM functionality
 
 const withNostrHeaderWrapper = (Component, props) => {
   return (
@@ -36,6 +37,9 @@ const withNewCreateFormHeaderWrapper = (Component, props) => {
 function Routing() {
   return (
     <Routes>
+
+      <Route path="/llm-test" element={<LLMTestPage />} />
+      
       <Route
         path="forms/:formSecret/responses"
         element={withNostrHeaderWrapper(ResponsesOld)}
