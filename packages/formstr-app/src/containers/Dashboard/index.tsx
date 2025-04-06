@@ -17,11 +17,11 @@ import { Drafts } from "./FormCards/Drafts";
 import { LocalForms } from "./FormCards/LocalForms";
 import { useNavigate } from "react-router-dom"; 
 import { availableTemplates, FormTemplate } from "../../templates";
-import TemplateCard from "../../components/TemplateCard";
 import { ROUTES } from "../../constants/routes";
 import { makeTag } from "../../utils/utility";
 import { FormInitData } from "../CreateFormNew/providers/FormBuilder/typeDefs";
 import { Tag } from "../../nostr/types";
+import TemplateSelectorModal from "../../components/TemplateSelectorModal";
 const MENU_OPTIONS = {
   local: "On this device",
   shared: "Shared with me",
@@ -43,7 +43,7 @@ export const Dashboard = () => {
     "local" | "shared" | "myForms" | "drafts"
   >("local");
 
-  const { poolRef } = useApplicationContext();
+  const { poolRef, isTemplateModalOpen, closeTemplateModal } = useApplicationContext();
 
   const subCloserRef = useRef<SubCloser | null>(null);
 
@@ -108,7 +108,15 @@ export const Dashboard = () => {
   };  
   const renderForms = () => {
     if (filter === "local") {
-      if (localForms.length == 0) return <EmptyScreen />;
+      if (localForms.length == 0){ 
+        return (
+          <EmptyScreen
+            templates={availableTemplates}
+            onTemplateClick={handleTemplateClick}
+            message="No forms found on this device. Start by choosing a template:"
+          />
+        );
+      }
       return (
         <LocalForms
           localForms={localForms}
@@ -118,7 +126,9 @@ export const Dashboard = () => {
         />
       );
     } else if (filter === "shared") {
-      if (nostrForms.size == 0) return <EmptyScreen />;
+      if (nostrForms.size == 0){
+        return <EmptyScreen message="No forms shared with you." />;
+      }
       return Array.from(nostrForms.values()).map((formEvent: Event) => {
         let d_tag = formEvent.tags.filter((t) => t[0] === "d")[0]?.[1];
         let key = `${formEvent.kind}:${formEvent.pubkey}:${
@@ -162,20 +172,6 @@ export const Dashboard = () => {
   return (
     <DashboardStyleWrapper>
       <div className="dashboard-container">
-      <div style={{ padding: '20px 0', borderBottom: '1px solid #eee', marginBottom: '20px' }}>
-            <Typography.Title level={4} style={{ textAlign: 'center', marginBottom: '16px' }}>
-              Start a new form
-            </Typography.Title>
-            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
-              {availableTemplates.map((template) => (
-                <TemplateCard
-                  key={template.id}
-                  template={template}
-                  onClick={handleTemplateClick}
-                />
-              ))}
-            </div>
-          </div>
         <div style={{ margin: 10 }}>
           <Dropdown overlay={menu} trigger={["click"]} placement="bottomLeft">
             <div
@@ -194,6 +190,11 @@ export const Dashboard = () => {
           </Dropdown>
         </div>
         <div className="form-cards-container">{renderForms()}</div>
+        <TemplateSelectorModal
+          visible={isTemplateModalOpen}
+          onClose={closeTemplateModal}
+          onTemplateSelect={handleTemplateClick}
+        />      
         <>
           {state && (
             <FormDetails
