@@ -1,6 +1,6 @@
-import React, { ChangeEvent, useState, useRef } from "react"; // Added React to imports if not already explicitly there
+import React, { ChangeEvent, useState, useRef } from "react"; 
 import QuestionCard from "../QuestionCard";
-import { Button, Input, App, message } from "antd"; // Added App, message
+import { Button, Input, App, message } from "antd"; 
 import { LLMFormGenerator, GeneratedFormData, FormFieldData } from "../LLMFormGenerator";
 import { AnswerTypes } from "@formstr/sdk/dist/interfaces";
 import { IAnswerSettings } from "../AnswerSettings/types";
@@ -10,9 +10,8 @@ import StyleWrapper from "./style";
 import DescriptionStyle from "./description.style";
 import useFormBuilderContext from "../../hooks/useFormBuilderContext";
 import { Reorder, motion, useDragControls } from "framer-motion";
-import { Field, Tag as NostrTag } from "../../../../nostr/types"; // Renamed Tag to NostrTag
+import { Field, Tag as NostrTag } from "../../../../nostr/types"; 
 
-// --- FloatingButton Component Definition (with styling improvements) ---
 interface FloatingButtonProps {
     onClick: () => void;
     containerRef: React.RefObject<HTMLDivElement>;
@@ -31,7 +30,7 @@ const FloatingButton = ({ onClick, containerRef }: FloatingButtonProps) => {
             onDragStart={() => setIsDragging(true)}
             onDragEnd={() => setIsDragging(false)}
             style={{
-                position: 'fixed', // Make it float
+                position: 'fixed', 
                 right: '30px',
                 bottom: '30px',
                 zIndex: 1000,
@@ -43,9 +42,9 @@ const FloatingButton = ({ onClick, containerRef }: FloatingButtonProps) => {
         >
             <Button
                 type="primary"
-                shape="circle" // Standard FAB shape
+                shape="circle" 
                 size="large"
-                icon={<span style={{ fontSize: '24px', lineHeight: '0' }}>+</span>} // Centered '+'
+                icon={<span style={{ fontSize: '24px', lineHeight: '0' }}>+</span>}
                 onClick={() => {
                     if (!isDragging) onClick();
                 }}
@@ -61,10 +60,7 @@ const FloatingButton = ({ onClick, containerRef }: FloatingButtonProps) => {
         </motion.div>
     );
 };
-// --- End FloatingButton Component Definition ---
 
-// --- Start Helper Function for AI Feature ---
-// Helper Function to map AnswerTypes to Primitive Strings
 function getPrimitiveFromRenderElement(renderElement: AnswerTypes): string {
     switch (renderElement) {
         case AnswerTypes.shortText:
@@ -82,20 +78,16 @@ function getPrimitiveFromRenderElement(renderElement: AnswerTypes): string {
             return "label";
         default:
             console.warn(`Unhandled AnswerType: ${renderElement}`);
-            return "text"; // Fallback
+            return "text"; 
     }
 }
-// --- End Helper Function ---
 
 export const QuestionsList = () => {
-    // --- Start AI Feature Hooks/State ---
-    const { message: messageApi } = App.useApp(); // Hook for context-aware messages
+    const { message: messageApi } = App.useApp(); 
     const [showAIGenerator, setShowAIGenerator] = useState(false);
-    // --- End AI Feature Hooks/State ---
 
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Destructure existing and new context values needed
     const {
         formSettings,
         questionsList,
@@ -105,15 +97,13 @@ export const QuestionsList = () => {
         updateQuestionsList,
         setIsLeftMenuOpen,
         bottomElementRef,
-        updateFormName, // Needed for AI feature
+        updateFormName, 
     } = useFormBuilderContext();
 
-    // --- Original handleDescriptionChange ---
     const handleDescriptionChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
         updateFormSetting({ description: e.target.value });
     };
 
-    // --- Original onReorderKey ---
     const onReorderKey = (keyType: "UP" | "DOWN", tempId: string) => {
         const questions = [...questionsList];
         const selectedQuestionIndex = questions.findIndex(
@@ -132,12 +122,10 @@ export const QuestionsList = () => {
         updateQuestionsList(questions);
     };
 
-    // --- Original onPlusButtonClick ---
     const onPlusButtonClick = () => {
         setIsLeftMenuOpen(true);
     };
 
-    // --- Start AI Feature Handler Function ---
     const handleAIFormGenerated = (formData: GeneratedFormData) => {
         console.log("AI Generated Data Received in QuestionsList:", formData);
         try {
@@ -193,17 +181,14 @@ export const QuestionsList = () => {
             messageApi.error("Failed to process the generated form data.");
         }
     };
-    // --- End AI Feature Handler Function ---
 
     return (
         <StyleWrapper
             className="main-content"
-            onClick={() => setQuestionIdInFocus(undefined)} // Keep original behavior
+            onClick={() => setQuestionIdInFocus(undefined)} 
             ref={containerRef}
-            // Add minHeight to ensure constraints work
             style={{ position: "relative", minHeight: 'calc(100vh - 67px)' }}
         >
-            {/* --- Start AI Feature UI Elements --- */}
             <div style={{ padding: '10px 0', textAlign: 'center' }}>
                 <Button
                     onClick={() => setShowAIGenerator(prev => !prev)}
@@ -218,10 +203,8 @@ export const QuestionsList = () => {
                     <LLMFormGenerator onFormGenerated={handleAIFormGenerated} />
                 </div>
             )}
-            {/* --- End AI Feature UI Elements --- */}
 
 
-            {/* --- Original Form Title/Description (Conditionally Rendered) --- */}
             {!showAIGenerator && (
                 <div>
                     <FormTitle className="form-title" />
@@ -232,33 +215,30 @@ export const QuestionsList = () => {
                                 value={formSettings.description}
                                 onChange={handleDescriptionChange}
                                 autoSize
-                                placeholder="Add a form description (optional, supports Markdown)" // Added placeholder
+                                placeholder="Add a form description (optional, supports Markdown)" 
                             />
                         </div>
                     </DescriptionStyle>
                 </div>
             )}
-            {/* --- End Original Form Title/Description --- */}
 
-            {/* --- Original Questions List (Conditionally Rendered) --- */}
             {!showAIGenerator && questionsList.length > 0 && (
                 <Reorder.Group
-                    axis="y" // Keep vertical reordering
+                    axis="y" 
                     values={questionsList}
                     onReorder={updateQuestionsList}
                     className="reorder-group"
                 >
-                    {/* Render existing questions */}
                     {questionsList.map((question, idx) => (
                         <Reorder.Item
                             value={question}
-                            key={question[1]} // Unique ID is crucial
+                            key={question[1]} 
                             dragListener={true}
                         >
                             <QuestionCard
                                 question={question}
                                 onEdit={editQuestion}
-                                onReorderKey={onReorderKey} // Pass the handler
+                                onReorderKey={onReorderKey} 
                                 firstQuestion={idx === 0}
                                 lastQuestion={idx === questionsList.length - 1}
                             />
@@ -266,19 +246,15 @@ export const QuestionsList = () => {
                     ))}
                 </Reorder.Group>
             )}
-            {/* --- End Original Questions List --- */}
 
-            {/* Original bottom ref div */}
             <div ref={bottomElementRef} style={{ height: '1px' }}></div>
 
-            {/* --- Original Mobile Add Button --- */}
-            <div className="mobile-add-btn"> {/* Ensure CSS targets this */}
+            <div className="mobile-add-btn"> 
                 <FloatingButton
                     onClick={onPlusButtonClick}
-                    containerRef={containerRef} // Pass ref for constraints
+                    containerRef={containerRef} 
                 />
             </div>
-            {/* --- End Original Mobile Add Button --- */}
 
         </StyleWrapper>
     );

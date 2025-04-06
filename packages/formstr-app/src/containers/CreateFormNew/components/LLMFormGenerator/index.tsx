@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
-// Import the Ollama utility function
-import { generateJsonWithOllama } from '../../../../utils/ollama'; // Adjust path relative to this file
+import { generateJsonWithOllama } from '../../../../utils/ollama';
 
-// Define the expected data structure for the generated form
 export interface FormFieldData {
-    id: string; // Placeholder - might need unique generation later
-    type: string; // e.g., 'ShortText', 'MultipleChoice'
+    id: string; 
+    type: string;
     label: string;
     required?: boolean;
     options?: string[];
@@ -17,14 +15,11 @@ export interface GeneratedFormData {
     fields: FormFieldData[];
 }
 
-// Define the props for the component
 interface LLMFormGeneratorProps {
-    onFormGenerated: (formData: GeneratedFormData) => void; // Callback function to parent
-    // Add any other props needed, e.g., initial description, styles
+    onFormGenerated: (formData: GeneratedFormData) => void; 
 }
 
-// --- Helper function for basic validation ---
-// Checks if the data structure roughly matches what we expect from the LLM
+
 function isValidGeneratedFormData(data: any): data is GeneratedFormData {
     if (!data || typeof data !== 'object') {
         console.error("Validation Error: Response is not an object.", data);
@@ -42,23 +37,18 @@ function isValidGeneratedFormData(data: any): data is GeneratedFormData {
         console.error("Validation Error: 'fields' is not an array.", data);
         return false;
     }
-    // Optional: Add more granular validation for each field if needed
     for (const field of data.fields) {
         if (!field || typeof field !== 'object' || typeof field.label !== 'string' || typeof field.type !== 'string') {
             console.error("Validation Error: A field is missing required properties (label, type).", field);
-            // return false; // Decide how strict to be - maybe allow partially valid forms?
         }
-        // Check options validity if needed
         if ((field.type === 'MultipleChoice' || field.type === 'Checkbox' || field.type === 'Dropdown') && !Array.isArray(field.options)) {
              console.warn("Validation Warning: Choice field is missing 'options' array.", field);
-             // Don't return false here, maybe just generate an empty options array later?
         }
     }
-    return true; // Passed basic checks
+    return true; 
 }
 
 
-// --- The UI Component ---
 export const LLMFormGenerator: React.FC<LLMFormGeneratorProps> = ({ onFormGenerated }) => {
     const [description, setDescription] = useState<string>('');
     const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -68,18 +58,15 @@ export const LLMFormGenerator: React.FC<LLMFormGeneratorProps> = ({ onFormGenera
         setDescription(event.target.value);
     };
 
-    // Handles the click event for the generate button
     const handleGenerateClick = () => {
-        // Basic check before sending API request
         if (description.trim() === '') {
              setError("Please enter a description for the form.");
              return;
         }
 
-        setError(null); // Clear previous errors
-        setIsLoading(true); // Set loading state
+        setError(null); 
+        setIsLoading(true); 
 
-        // --- Construct the Prompt for the LLM ---
         const prompt = `
 You are an assistant that generates JSON structures for web forms based on user descriptions.
 Analyze the following user description and create a JSON object representing the form.
@@ -114,36 +101,28 @@ User Description:
 JSON Output:
 `;
 
-        // --- Call the Ollama API Utility ---
-        generateJsonWithOllama<GeneratedFormData>(prompt) // Expecting GeneratedFormData structure
+        generateJsonWithOllama<GeneratedFormData>(prompt) 
             .then(parsedData => {
-                 // --- Validate the Response ---
                  console.log("Raw data received from Ollama parser:", parsedData);
                  if (isValidGeneratedFormData(parsedData)) {
                      console.log("Validation successful. Calling onFormGenerated.");
-                     // --- Pass Valid Data to Parent ---
-                     // Note: ID uniqueness and generation might need refinement in Step 5
                      onFormGenerated(parsedData);
                  } else {
-                     // Throw an error if validation function returns false
                      throw new Error("Received invalid or incomplete form structure from AI. Please try rephrasing your description or check the Ollama model.");
                  }
-                 setIsLoading(false); // Stop loading on success
+                 setIsLoading(false); 
             })
             .catch(err => {
-                 // --- Handle Errors ---
                  console.error("Error during AI form generation:", err);
                  if (err instanceof Error) {
-                     setError(err.message); // Display specific error message
+                     setError(err.message); 
                  } else {
-                     setError("An unknown error occurred during form generation."); // Fallback message
+                     setError("An unknown error occurred during form generation."); 
                  }
-                 setIsLoading(false); // Stop loading on error
+                 setIsLoading(false); 
             });
-            // NOTE: No .finally() block here
     };
 
-    // --- Basic Styling --- (Adapt to your project's styling solution)
     const styles: { [key: string]: React.CSSProperties } = {
         container: {
             padding: '15px',
@@ -158,25 +137,25 @@ JSON Output:
             fontWeight: 'bold',
         },
         textarea: {
-            width: '95%', // Adjust as needed
+            width: '95%', 
             minHeight: '80px',
             padding: '8px',
             marginBottom: '10px',
             border: '1px solid #ccc',
             borderRadius: '4px',
-            boxSizing: 'border-box', // Include padding and border in the element's total width and height
+            boxSizing: 'border-box', 
         },
         button: {
             padding: '10px 15px',
             border: 'none',
             borderRadius: '4px',
-            backgroundColor: '#007bff', // Example blue color
+            backgroundColor: '#007bff',
             color: 'white',
             cursor: 'pointer',
             opacity: isLoading ? 0.6 : 1,
             transition: 'opacity 0.2s ease-in-out',
         },
-        buttonDisabled: { // Style for when button is explicitly disabled
+        buttonDisabled: {
              backgroundColor: '#cccccc',
              cursor: 'not-allowed',
         },
@@ -187,7 +166,7 @@ JSON Output:
         },
         error: {
             marginTop: '10px',
-            color: '#dc3545', // Example red color
+            color: '#dc3545', 
             fontWeight: 'bold',
             padding: '8px',
             border: '1px solid #f5c6cb',
@@ -209,32 +188,26 @@ JSON Output:
                 placeholder="e.g., A simple contact form with name, email, and message fields. Make email required."
                 rows={4}
                 style={styles.textarea}
-                disabled={isLoading} // Disable textarea while loading
+                disabled={isLoading} 
             />
             <button
                 onClick={handleGenerateClick}
-                // Disable if loading OR if description is empty after trimming whitespace
                 disabled={isLoading || description.trim() === ''}
                 style={{
                     ...styles.button,
-                    ...(isLoading || description.trim() === '' ? styles.buttonDisabled : {}) // Apply disabled style
+                    ...(isLoading || description.trim() === '' ? styles.buttonDisabled : {}) 
                 }}
             >
                 {isLoading ? 'Generating...' : 'Generate Form with AI'}
             </button>
 
-            {/* Conditional rendering for loading indicator */}
             {isLoading && (
                 <div style={styles.loading}>Communicating with AI assistant... Please wait.</div>
             )}
 
-            {/* Conditional rendering for error message */}
             {error && (
                 <div style={styles.error}>Error: {error}</div>
             )}
         </div>
     );
 };
-
-// Optional: Default export if this is the primary component in the index.tsx file
-// export default LLMFormGenerator;
