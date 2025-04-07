@@ -33,7 +33,7 @@ export const partyInviteTemplate: FormTemplate = {
     questionsList: [
       // Field 1: Name (Required, Short Text)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'text', // dataType
         'What is your name?', // label
@@ -43,7 +43,7 @@ export const partyInviteTemplate: FormTemplate = {
 
       // Field 2: Attendance (Required, Single Choice / Radio Button)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'option', // dataType
         'Can you attend?', // label
@@ -56,7 +56,7 @@ export const partyInviteTemplate: FormTemplate = {
 
        // Field 3: How many attending (Not Required, Number)
        [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'number', // dataType
         'How many of you are attending?', // label
@@ -66,7 +66,7 @@ export const partyInviteTemplate: FormTemplate = {
 
       // Field 4: What bringing (Not Required, Multiple Choice / Checkboxes)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'option', // dataType
         'What will you be bringing? (Let us know what kind of dish(es) you\'ll be bringing)', // label (Combined for clarity)
@@ -83,7 +83,7 @@ export const partyInviteTemplate: FormTemplate = {
 
        // Field 5: Allergies (Not Required, Paragraph)
        [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'text', // dataType
         'Do you have any allergies or dietary restrictions?', // label
@@ -93,7 +93,7 @@ export const partyInviteTemplate: FormTemplate = {
 
       // Field 6: Email (Not Required, Short Text, Email Validation)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'text', // dataType
         'What is your email address?', // label

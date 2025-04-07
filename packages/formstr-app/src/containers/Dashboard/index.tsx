@@ -18,10 +18,10 @@ import { LocalForms } from "./FormCards/LocalForms";
 import { useNavigate } from "react-router-dom"; 
 import { availableTemplates, FormTemplate } from "../../templates";
 import { ROUTES } from "../../constants/routes";
-import { makeTag } from "../../utils/utility";
 import { FormInitData } from "../CreateFormNew/providers/FormBuilder/typeDefs";
-import { Tag } from "../../nostr/types";
 import TemplateSelectorModal from "../../components/TemplateSelectorModal";
+import { createFormSpecFromTemplate } from "../../utils/formUtils";
+
 const MENU_OPTIONS = {
   local: "On this device",
   shared: "Shared with me",
@@ -87,25 +87,11 @@ export const Dashboard = () => {
   const navigate = useNavigate();
 
   const handleTemplateClick = (template: FormTemplate) => {
-    const newFormInstanceId = makeTag(6);
-
-    const transformedQuestionsList = template.initialState.questionsList.map(field => {
-      const transformedField = [...field];
-      transformedField[0] = "field";
-      return transformedField;
-    }) as Tag[];
-    const spec: Tag[] = [
-      ["d", newFormInstanceId], 
-      ["name", template.initialState.formName],
-      ["settings", JSON.stringify(template.initialState.formSettings)],
-      ...transformedQuestionsList,
-    ];
-    const navigationState: FormInitData = {
-      spec: spec,
-      id: newFormInstanceId, 
-    };
+    const { spec, id } = createFormSpecFromTemplate(template);
+    const navigationState: FormInitData = { spec, id };
     navigate(ROUTES.CREATE_FORMS_NEW, { state: navigationState });
-  };  
+  };
+
   const renderForms = () => {
     if (filter === "local") {
       if (localForms.length == 0){ 

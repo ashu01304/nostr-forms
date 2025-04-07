@@ -36,7 +36,7 @@ export const eventRegistrationTemplate: FormTemplate = {
     questionsList: [
       // Field 1: Name (Required, Short Text)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'text', // dataType
         'Name', // label
@@ -46,7 +46,7 @@ export const eventRegistrationTemplate: FormTemplate = {
 
       // Field 2: Email (Required, Short Text, Email Validation)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'text', // dataType
         'Email', // label
@@ -65,7 +65,7 @@ export const eventRegistrationTemplate: FormTemplate = {
 
       // Field 3: Organization (Required, Short Text)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'text', // dataType
         'Organization', // label
@@ -75,7 +75,7 @@ export const eventRegistrationTemplate: FormTemplate = {
 
       // Field 4: Days Attending (Required, Multiple Choice / Checkboxes)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'option', // dataType
         'What days will you attend?', // label
@@ -89,7 +89,7 @@ export const eventRegistrationTemplate: FormTemplate = {
 
       // Field 5: Dietary Restrictions (Required, Single Choice / Radio Buttons)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'option', // dataType
         'Dietary restrictions', // label
@@ -106,7 +106,7 @@ export const eventRegistrationTemplate: FormTemplate = {
 
       // Field 6: Payment Understanding (Required, Single Choice / Radio Button)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'option', // dataType
         'I understand that I will have to pay $$ upon arrival', // label

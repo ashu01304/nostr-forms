@@ -31,7 +31,7 @@ export const rsvpTemplate: FormTemplate = {
     },
     questionsList: [
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'option', // dataType
         'Can you attend?', // label
@@ -44,7 +44,7 @@ export const rsvpTemplate: FormTemplate = {
 
       // Field 2: Names of Attendees (Text / Paragraph)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'text', // dataType
         'What are the names of people attending?', // label
@@ -54,7 +54,7 @@ export const rsvpTemplate: FormTemplate = {
 
       // Field 3: How Heard (Multiple Choice / Checkboxes)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'option', // dataType
         'How did you hear about this event?', // label
@@ -69,7 +69,7 @@ export const rsvpTemplate: FormTemplate = {
 
       // Field 4: Comments (Text / Paragraph)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'text', // dataType
         'Comments and/or questions', // label

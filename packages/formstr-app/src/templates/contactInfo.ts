@@ -24,7 +24,7 @@ export const contactInfoTemplate: FormTemplate = {
     questionsList: [
       // Field 1: Name (Required, Short Text)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'text', // dataType
         'Name', // label
@@ -34,7 +34,7 @@ export const contactInfoTemplate: FormTemplate = {
 
       // Field 2: Email (Required, Short Text, with validation)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'text', // dataType
         'Email', // label
@@ -53,7 +53,7 @@ export const contactInfoTemplate: FormTemplate = {
 
       // Field 3: Address (Required, Paragraph)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'text', // dataType
         'Address', // label
@@ -63,7 +63,7 @@ export const contactInfoTemplate: FormTemplate = {
 
       // Field 4: Phone number (Not Required, Short Text)
       [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'text', // dataType
         'Phone number', // label
@@ -73,7 +73,7 @@ export const contactInfoTemplate: FormTemplate = {
 
        // Field 5: Comments (Not Required, Paragraph)
        [
-        '', // placeholder
+        'field', 
         generateFieldId(),
         'text', // dataType
         'Comments', // label

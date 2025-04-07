@@ -21,7 +21,7 @@ export const blankTemplate: FormTemplate = {
     },
     questionsList: [
        [
-        '', // placeholder (unused in Field tuple)
+        'field', 
         generateFieldId(), // Use generated ID
         'text', // dataType (primitive type)
         'Untitled Question', // label
