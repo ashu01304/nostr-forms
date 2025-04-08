@@ -17,9 +17,7 @@ function GradientCreateFormButton() {
           color: '#ffffff',
           borderRadius: '6px',
           cursor: 'pointer',
-          lineHeight: '1.0',
           top: '4px',
-          overflow: 'hidden',
         }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
