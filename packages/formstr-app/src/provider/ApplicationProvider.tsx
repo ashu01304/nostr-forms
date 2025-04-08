@@ -1,4 +1,4 @@
-import React, { createContext, FC, ReactNode, useRef } from "react";
+import React, { createContext, FC, ReactNode, useRef, useState } from "react";
 import { SimplePool } from "nostr-tools";
 
 interface ApplicationProviderProps {
@@ -7,6 +7,9 @@ interface ApplicationProviderProps {
 
 export interface ApplicationContextType {
   poolRef: React.MutableRefObject<SimplePool>;
+  isTemplateModalOpen: boolean;
+  openTemplateModal: () => void;
+  closeTemplateModal: () => void;
 }
 
 export const ApplicationContext = createContext<
@@ -17,9 +20,18 @@ export const ApplicationProvider: FC<ApplicationProviderProps> = ({
   children,
 }) => {
   const poolRef = useRef(new SimplePool());
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const openTemplateModal = () => setIsTemplateModalOpen(true); 
+  const closeTemplateModal = () => setIsTemplateModalOpen(false);
+  const contextValue: ApplicationContextType = {
+    poolRef,
+    isTemplateModalOpen,
+    openTemplateModal,
+    closeTemplateModal,
+  };
 
   return (
-    <ApplicationContext.Provider value={{ poolRef }}>
+    <ApplicationContext.Provider value={ contextValue }>
       {children}
     </ApplicationContext.Provider>
   );

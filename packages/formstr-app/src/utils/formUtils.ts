@@ -1,9 +1,22 @@
+import { FormTemplate } from "../templates";
+import { makeTag } from "./utility";
 import { getDefaultRelays } from "@formstr/sdk";
 import { Tag } from "@formstr/sdk/dist/formstr/nip101";
 import { nip44, Event, UnsignedEvent, SimplePool, nip19 } from "nostr-tools";
 import { bytesToHex } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
 import { naddrUrl } from "./utility";
+
+export const createFormSpecFromTemplate = (template: FormTemplate): { spec: Tag[], id: string } => {
+  const newFormInstanceId = makeTag(6);
+  const spec: Tag[] = [
+    ["d", newFormInstanceId],
+    ["name", template.initialState.formName],
+    ["settings", JSON.stringify(template.initialState.formSettings)],
+    ...(template.initialState.questionsList as Tag[]),
+  ];
+  return { spec, id: newFormInstanceId };
+};
 
 export const fetchKeys = async (
   formAuthor: string,

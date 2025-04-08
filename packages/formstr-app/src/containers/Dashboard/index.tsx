@@ -15,6 +15,13 @@ import { DownOutlined } from "@ant-design/icons";
 import { MyForms } from "./FormCards/MyForms";
 import { Drafts } from "./FormCards/Drafts";
 import { LocalForms } from "./FormCards/LocalForms";
+import { useNavigate } from "react-router-dom"; 
+import { availableTemplates, FormTemplate } from "../../templates";
+import { ROUTES } from "../../constants/routes";
+import { FormInitData } from "../CreateFormNew/providers/FormBuilder/typeDefs";
+import TemplateSelectorModal from "../../components/TemplateSelectorModal";
+import { createFormSpecFromTemplate } from "../../utils/formUtils";
+
 const MENU_OPTIONS = {
   local: "On this device",
   shared: "Shared with me",
@@ -36,7 +43,7 @@ export const Dashboard = () => {
     "local" | "shared" | "myForms" | "drafts"
   >("local");
 
-  const { poolRef } = useApplicationContext();
+  const { poolRef, isTemplateModalOpen, closeTemplateModal } = useApplicationContext();
 
   const subCloserRef = useRef<SubCloser | null>(null);
 
@@ -77,9 +84,25 @@ export const Dashboard = () => {
     };
   }, [pubkey]);
 
+  const navigate = useNavigate();
+
+  const handleTemplateClick = (template: FormTemplate) => {
+    const { spec, id } = createFormSpecFromTemplate(template);
+    const navigationState: FormInitData = { spec, id };
+    navigate(ROUTES.CREATE_FORMS_NEW, { state: navigationState });
+  };
+
   const renderForms = () => {
     if (filter === "local") {
-      if (localForms.length == 0) return <EmptyScreen />;
+      if (localForms.length == 0){ 
+        return (
+          <EmptyScreen
+            templates={availableTemplates}
+            onTemplateClick={handleTemplateClick}
+            message="No forms found on this device. Start by choosing a template:"
+          />
+        );
+      }
       return (
         <LocalForms
           localForms={localForms}
@@ -89,7 +112,9 @@ export const Dashboard = () => {
         />
       );
     } else if (filter === "shared") {
-      if (nostrForms.size == 0) return <EmptyScreen />;
+      if (nostrForms.size == 0){
+        return <EmptyScreen message="No forms shared with you." />;
+      }
       return Array.from(nostrForms.values()).map((formEvent: Event) => {
         let d_tag = formEvent.tags.filter((t) => t[0] === "d")[0]?.[1];
         let key = `${formEvent.kind}:${formEvent.pubkey}:${
@@ -151,6 +176,11 @@ export const Dashboard = () => {
           </Dropdown>
         </div>
         <div className="form-cards-container">{renderForms()}</div>
+        <TemplateSelectorModal
+          visible={isTemplateModalOpen}
+          onClose={closeTemplateModal}
+          onTemplateSelect={handleTemplateClick}
+        />      
         <>
           {state && (
             <FormDetails
