@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { generateJsonWithOllama } from '../../../../utils/ollama';
+import { OLLAMA_FORM_GENERATION_PROMPT_TEMPLATE } from '../../../../constants/prompts';
+import { Button, Input, message, Typography, Divider } from 'antd'
+import { getItem, setItem, LOCAL_STORAGE_KEYS } from '../../../../utils/localStorage';
 
+const { Text } = Typography;
 export interface FormFieldData {
     id: string; 
     type: string;
@@ -53,9 +57,40 @@ export const LLMFormGenerator: React.FC<LLMFormGeneratorProps> = ({ onFormGenera
     const [description, setDescription] = useState<string>('');
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    const [ollamaUrlInput, setOllamaUrlInput] = useState<string>('');
+    const [ollamaModelInput, setOllamaModelInput] = useState<string>('');
+
+    useEffect(() => {
+        const storedUrl = getItem<string>(LOCAL_STORAGE_KEYS.OLLAMA_URL, { parseAsJson: false });
+        setOllamaUrlInput(storedUrl || 'http://localhost:11434'); // Default URL
+        const storedModel = getItem<string>(LOCAL_STORAGE_KEYS.OLLAMA_MODEL, { parseAsJson: false });
+        setOllamaModelInput(storedModel || 'llama3'); // Default model
+    }, []);
 
     const handleDescriptionChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
         setDescription(event.target.value);
+    };
+
+    const handleOllamaUrlSave = () => {
+        const urlToSave = ollamaUrlInput.trim();
+        if (urlToSave === '' || urlToSave.startsWith('http://') || urlToSave.startsWith('https://')) {
+            setItem(LOCAL_STORAGE_KEYS.OLLAMA_URL, urlToSave, { parseAsJson: false });
+            message.success("LLM Server URL saved!");
+        } else {
+            message.error("Invalid URL format. Please include http:// or https://, or leave empty to use default.");
+        }
+    };
+
+    const handleOllamaModelSave = () => {
+        const modelToSave = ollamaModelInput.trim();
+        if (modelToSave) {
+            setItem(LOCAL_STORAGE_KEYS.OLLAMA_MODEL, modelToSave, { parseAsJson: false });
+            message.success("LLM Model Name saved!");
+        } else {
+            message.warning("Model name cannot be empty. Reverted to previous or default.");
+            const storedModel = getItem<string>(LOCAL_STORAGE_KEYS.OLLAMA_MODEL, { parseAsJson: false });
+            setOllamaModelInput(storedModel || 'llama3');
+        }
     };
 
     const handleGenerateClick = () => {
@@ -63,45 +98,15 @@ export const LLMFormGenerator: React.FC<LLMFormGeneratorProps> = ({ onFormGenera
              setError("Please enter a description for the form.");
              return;
         }
+        setError(null);
+        setIsLoading(true);
 
-        setError(null); 
-        setIsLoading(true); 
+        const fullPrompt = OLLAMA_FORM_GENERATION_PROMPT_TEMPLATE + JSON.stringify(description);
 
-        const prompt = `
-You are an assistant that generates JSON structures for web forms based on user descriptions.
-Analyze the following user description and create a JSON object representing the form.
 
-The JSON object MUST have the following structure:
-{
-  "title": "string", // The main title of the form
-  "description": "string", // Optional: A brief description of the form
-  "fields": [ // An array of field objects
-    {
-      "id": "string", // A unique identifier string (e.g., "field_name", "question_1") - generate based on label if possible
-      "type": "string", // The type of the form field. Supported types: ShortText, LongText, Email, Number, MultipleChoice, Checkbox, Dropdown, Date, Time
-      "label": "string", // The text label/question for the field
-      "required": boolean, // Optional: true if the field must be filled, defaults to false
-      "options": ["string", "string", ...] // Optional: An array of strings for MultipleChoice, Checkbox, Dropdown types ONLY
-    }
-    // ... more field objects
-  ]
-}
+;
 
-IMPORTANT RULES:
-- Respond ONLY with the valid JSON object described above.
-- Do NOT include any introductory text, explanations, apologies, or markdown formatting like \`\`\`json before or after the JSON object.
-- Ensure all field types are one of the supported types listed. If a type seems unsupported, use 'ShortText' or 'LongText'.
-- Infer field types and requirement status from the description where possible. If requirement is unclear, default 'required' to false.
-- Provide sensible, unique 'id' strings for each field (e.g., based on the label, lowercased with underscores).
-- If the description asks for choice options, include the 'options' array for that field.
-
-User Description:
-"${description}"
-
-JSON Output:
-`;
-
-        generateJsonWithOllama<GeneratedFormData>(prompt) 
+        generateJsonWithOllama<GeneratedFormData>(fullPrompt) 
             .then(parsedData => {
                  console.log("Raw data received from Ollama parser:", parsedData);
                  if (isValidGeneratedFormData(parsedData)) {
@@ -120,16 +125,17 @@ JSON Output:
                      setError("An unknown error occurred during form generation."); 
                  }
                  setIsLoading(false); 
-            });
+            })
+            .finally(() => setIsLoading(false));
     };
 
     const styles: { [key: string]: React.CSSProperties } = {
         container: {
             padding: '15px',
-            border: '1px solid #ccc',
+            border: '1px solid #eee',
             borderRadius: '8px',
-            margin: '10px 0',
-            backgroundColor: '#f9f9f9',
+            // margin: '10px 0',
+            backgroundColor: '#fafafa',
         },
         label: {
             display: 'block',
@@ -137,27 +143,9 @@ JSON Output:
             fontWeight: 'bold',
         },
         textarea: {
-            width: '95%', 
+            width: '100%',
             minHeight: '80px',
-            padding: '8px',
-            marginBottom: '10px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            boxSizing: 'border-box', 
-        },
-        button: {
-            padding: '10px 15px',
-            border: 'none',
-            borderRadius: '4px',
-            backgroundColor: '#007bff',
-            color: 'white',
-            cursor: 'pointer',
-            opacity: isLoading ? 0.6 : 1,
-            transition: 'opacity 0.2s ease-in-out',
-        },
-        buttonDisabled: {
-             backgroundColor: '#cccccc',
-             cursor: 'not-allowed',
+            marginBottom: '10px'  
         },
         loading: {
             marginTop: '10px',
@@ -172,6 +160,17 @@ JSON Output:
             border: '1px solid #f5c6cb',
             borderRadius: '4px',
             backgroundColor: '#f8d7da',
+        },
+        settingInputDiv: { 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'stretch', 
+            gap: '5px', 
+            marginBottom: '10px' 
+        },
+        settingHelpText: { 
+            fontSize: '0.8em', 
+            marginTop: '3px' 
         },
     };
 
@@ -190,16 +189,43 @@ JSON Output:
                 style={styles.textarea}
                 disabled={isLoading} 
             />
-            <button
-                onClick={handleGenerateClick}
-                disabled={isLoading || description.trim() === ''}
-                style={{
-                    ...styles.button,
-                    ...(isLoading || description.trim() === '' ? styles.buttonDisabled : {}) 
-                }}
+                        <div style={styles.settingInputDiv}>
+                <Text style={styles.label}>LLM Server URL</Text>
+                <Input
+                    placeholder="http://localhost:11434"
+                    value={ollamaUrlInput}
+                    onChange={(e) => setOllamaUrlInput(e.target.value)}
+                    onBlur={handleOllamaUrlSave}
+                    size="middle" // Optional: Keep consistent sizing
+                    disabled={isLoading} // Disable while generating
+                />
+                <Text type="secondary" style={styles.settingHelpText}>Default: http://localhost:11434</Text>
+            </div>
+
+            <div style={styles.settingInputDiv}>
+                <Text style={styles.label}>LLM Model Name</Text>
+                <Input
+                    placeholder="llama3"
+                    value={ollamaModelInput}
+                    onChange={(e) => setOllamaModelInput(e.target.value)}
+                    onBlur={handleOllamaModelSave}
+                    size="middle" // Optional: Keep consistent sizing
+                    disabled={isLoading} // Disable while generating
+                />
+                <Text type="secondary" style={styles.settingHelpText}>E.g., llama3, mistral, helper</Text>
+            </div>
+
+            <Divider /> {/* --- Add Divider --- */}
+
+            <Button
+            type="primary" 
+            onClick={handleGenerateClick}
+            disabled={isLoading || description.trim() === ''}
+            loading={isLoading}
+            style={{ marginTop: '0px', width: '100%' }}
             >
-                {isLoading ? 'Generating...' : 'Generate Form with AI'}
-            </button>
+            {isLoading ? 'Generating...' : 'Generate Form with AI'}
+            </Button>
 
             {isLoading && (
                 <div style={styles.loading}>Communicating with AI assistant... Please wait.</div>

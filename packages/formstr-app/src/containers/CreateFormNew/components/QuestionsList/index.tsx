@@ -104,6 +104,18 @@ export const QuestionsList = () => {
         updateFormSetting({ description: e.target.value });
     };
 
+    const AI_TYPE_TO_ANSWER_TYPE_MAP: { [key: string]: AnswerTypes } = {
+        'ShortText': AnswerTypes.shortText,
+        'LongText': AnswerTypes.shortText,
+        'Number': AnswerTypes.number,
+        'Email': AnswerTypes.shortText,
+        'Date': AnswerTypes.date,
+        'Time': AnswerTypes.time,
+        'MultipleChoice': AnswerTypes.radioButton,
+        'Checkbox': AnswerTypes.checkboxes,
+        'Dropdown': AnswerTypes.dropdown,
+    };
+
     const onReorderKey = (keyType: "UP" | "DOWN", tempId: string) => {
         const questions = [...questionsList];
         const selectedQuestionIndex = questions.findIndex(
@@ -138,25 +150,13 @@ export const QuestionsList = () => {
                 const label = aiField.label;
                 const options = Array.isArray(aiField.options) ? aiField.options : [];
 
-                const renderElement: AnswerTypes =
-                    fieldType === 'ShortText' ? AnswerTypes.shortText :
-                    fieldType === 'LongText' ? AnswerTypes.paragraph :
-                    fieldType === 'Number' ? AnswerTypes.number :
-                    fieldType === 'Email' ? AnswerTypes.shortText :
-                    fieldType === 'Date' ? AnswerTypes.date :
-                    fieldType === 'Time' ? AnswerTypes.time :
-                    fieldType === 'MultipleChoice' ? AnswerTypes.radioButton :
-                    fieldType === 'Checkbox' ? AnswerTypes.checkboxes :
-                    fieldType === 'Dropdown' ? AnswerTypes.dropdown :
-                    AnswerTypes.shortText;
-
-                const primitiveType = getPrimitiveFromRenderElement(renderElement);
-
                 const defaultSettings: IAnswerSettings = {
-                    renderElement: renderElement,
-                    required: aiField.required ?? false,
+                    renderElement: AI_TYPE_TO_ANSWER_TYPE_MAP[fieldType] || AnswerTypes.shortText,
+                    required: aiField.required || false,
                     validationRules: {},
                 };
+
+                const primitiveType = getPrimitiveFromRenderElement(defaultSettings.renderElement as AnswerTypes);
 
                 const mappedOptions = options.map(optionLabel => [
                     makeTag(6),
