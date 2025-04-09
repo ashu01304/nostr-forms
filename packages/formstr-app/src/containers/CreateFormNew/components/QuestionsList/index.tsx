@@ -4,8 +4,8 @@ import FormTitle from "../FormTitle";
 import StyleWrapper from "./style";
 import DescriptionStyle from "./description.style";
 import useFormBuilderContext from "../../hooks/useFormBuilderContext";
-import { ChangeEvent, useState, useRef, useEffect } from "react";
-import { Reorder, motion, useDragControls } from "framer-motion";
+import React, { ChangeEvent, useState, useRef, useEffect } from "react";
+import { Reorder, motion, useDragControls, DragControls } from "framer-motion";
 import { Field } from "../../../../nostr/types";
 
 interface FloatingButtonProps {
@@ -46,8 +46,47 @@ const FloatingButton = ({ onClick, containerRef }: FloatingButtonProps) => {
   );
 };
 
+interface DraggableQuestionItemProps {
+  question: Field;
+  isMobile: boolean;
+  onEdit: (question: Field, tempId: string) => void;
+  onReorderKey: (keyType: "UP" | "DOWN", tempId: string) => void;
+  firstQuestion: boolean;
+  lastQuestion: boolean;
+}
+const DraggableQuestionItem: React.FC<DraggableQuestionItemProps> = ({
+  question,
+  isMobile,
+  onEdit,
+  onReorderKey,
+  firstQuestion,
+  lastQuestion,
+}) => {
+  const dragControls = isMobile ? useDragControls() : undefined;
+
+  return (
+    <Reorder.Item
+      value={question}
+      key={question[1]} 
+      dragListener={!isMobile} 
+      dragControls={dragControls}
+    >
+      <QuestionCard
+        question={question}
+        onEdit={onEdit}
+        onReorderKey={onReorderKey}
+        firstQuestion={firstQuestion}
+        lastQuestion={lastQuestion}
+        dragControls={dragControls} 
+      />
+    </Reorder.Item>
+  );
+};
+
 export const QuestionsList = () => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
 
   const {
     formSettings,
@@ -59,6 +98,13 @@ export const QuestionsList = () => {
     setIsLeftMenuOpen,
     bottomElementRef,
   } = useFormBuilderContext();
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const handleDescriptionChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     updateFormSetting({ description: e.target.value });
@@ -116,19 +162,15 @@ export const QuestionsList = () => {
       >
         <div>
           {questionsList.map((question, idx) => (
-            <Reorder.Item
-              value={question}
+            <DraggableQuestionItem
               key={question[1]}
-              dragListener={true}
-            >
-              <QuestionCard
-                question={question}
-                onEdit={editQuestion}
-                onReorderKey={onReorderKey}
-                firstQuestion={idx === 0}
-                lastQuestion={idx === questionsList.length - 1}
-              />
-            </Reorder.Item>
+              question={question}
+              isMobile={isMobile}
+              onEdit={editQuestion}
+              onReorderKey={onReorderKey}
+              firstQuestion={idx === 0}
+              lastQuestion={idx === questionsList.length - 1}
+            />
           ))}
           <div ref={bottomElementRef}></div>
         </div>
