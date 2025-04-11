@@ -118,4 +118,34 @@ export const PRE_BUILT_MENU = [
     },
     primitive: "text",
   },
+  {
+    key: PRE_BUILT_MENU_KEYS.FULL_NAME,
+    label: "Full Name",
+    icon: <InputIcon style={{ color: "#1e3f66.17", fill: "#1e3f66" }} />,
+    primitive: "text",
+    answerSettings: {
+      renderElement: AnswerTypes.shortText,
+      validationRules: {
+        regex: {
+          pattern: "^[a-zA-ZÀ-ÿ'\\-\\s]+$",
+          errorMessage: "Please enter a valid name.",
+        },
+      },
+    },
+  },
+  {
+    key: PRE_BUILT_MENU_KEYS.PHONE_NUMBER,
+    label: "Phone Number",
+    icon: <InputIcon style={{ color: "#1e3f66.17", fill: "#1e3f66" }} />,
+    primitive: "text",
+    answerSettings: {
+      renderElement: AnswerTypes.shortText,
+      validationRules: {
+        regex: {
+          pattern: "^[+]?[\\d\\s()-]{7,}$",
+          errorMessage: "Please enter a valid phone number.",
+        },
+      },
+    },
+  },
 ];
