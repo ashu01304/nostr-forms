@@ -101,6 +101,7 @@ export const PRE_BUILT_MENU = [
     primitive: "text",
     answerSettings: {
       renderElement: AnswerTypes.date,
+      disableFuture: true,
     },
   },
   {

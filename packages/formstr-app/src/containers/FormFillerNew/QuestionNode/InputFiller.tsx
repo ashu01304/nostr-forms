@@ -15,6 +15,12 @@ interface InputFillerProps {
   defaultValue?: string | number | boolean;
 }
 
+interface DateFillerProps {
+  onChange: (value: string) => void;
+  defaultValue?: string;
+  fieldConfig?: any;
+}
+
 export const InputFiller: React.FC<InputFillerProps> = ({
   fieldConfig,
   options,
@@ -87,6 +93,7 @@ export const InputFiller: React.FC<InputFillerProps> = ({
         <DateFiller
           defaultValue={defaultValue as string}
           onChange={handleValueChange}
+          fieldConfig={fieldConfig}
         />
       ),
       [AnswerTypes.time]: (

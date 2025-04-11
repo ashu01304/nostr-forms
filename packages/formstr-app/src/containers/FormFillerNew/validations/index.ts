@@ -9,6 +9,7 @@ import {
   ValidationRuleTypes,
 } from "@formstr/sdk/dist/interfaces";
 import { Rule } from "antd/es/form";
+import dayjs from 'dayjs';
 
 //TODO: Find a method better than "any" with overloads for dynamic types
 function NumRange(rule: any): Rule;
@@ -91,6 +92,21 @@ function Match(rule: MatchRule): Rule {
   };
 }
 
+function validateNotFutureDate(): Rule {
+  return {
+    validator: async (_, value) => {
+      if (!value || !value[0]) {
+        return Promise.resolve();
+      }
+      const selectedDate = dayjs(value[0]);
+      if (selectedDate.isValid() && selectedDate.isAfter(dayjs().endOf('day'))) {
+        return Promise.reject(new Error("Date cannot be in the future."));
+      }
+      return Promise.resolve();
+    },
+  };
+}
+
 const RuleValidatorMap = {
   [ValidationRuleTypes.range]: NumRange,
   [ValidationRuleTypes.max]: MaxLength,
@@ -123,5 +139,8 @@ export const getValidationRules = (
       rules.push(createRule(ruleType, validationRules));
     }
   });
+  if (answerSettings.disableFuture) {
+    rules.push(validateNotFutureDate());
+  }
   return rules;
 };
