@@ -164,7 +164,7 @@ export const Dashboard = () => {
             <Button>
               {MENU_OPTIONS[filter]}
               <DownOutlined
-                style={{ marginLeft: "8px", fontSize: "12px" }} // Keep icon style if needed
+                style={{ marginLeft: "8px", fontSize: "12px" }}
               />
             </Button>
           </Dropdown>
