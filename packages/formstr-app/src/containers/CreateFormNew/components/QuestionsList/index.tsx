@@ -1,13 +1,16 @@
+import React, { ChangeEvent, useState, useRef } from "react";
 import QuestionCard from "../QuestionCard";
-import { Button, Input } from "antd";
+import { Button, Input, App, message } from "antd";
+import { LLMFormGenerator, GeneratedFormData } from "../LLMFormGenerator";
+import { AnswerTypes } from "@formstr/sdk/dist/interfaces";
+import { IAnswerSettings } from "../AnswerSettings/types";
+import { makeTag, isMobile } from "../../../../utils/utility";
 import FormTitle from "../FormTitle";
 import StyleWrapper from "./style";
 import DescriptionStyle from "./description.style";
 import useFormBuilderContext from "../../hooks/useFormBuilderContext";
-import React, { ChangeEvent, useRef, useState } from "react";
-import { Reorder, motion, useDragControls, DragControls } from "framer-motion";
-import { Field } from "../../../../nostr/types";
-import { isMobile } from "../../../../utils/utility";
+import { Reorder, motion, useDragControls } from "framer-motion";
+import { Field, Tag as NostrTag } from "../../../../nostr/types";
 
 interface FloatingButtonProps {
   onClick: () => void;
@@ -17,35 +20,68 @@ interface FloatingButtonProps {
 const FloatingButton = ({ onClick, containerRef }: FloatingButtonProps) => {
   const dragControls = useDragControls();
   const [isDragging, setIsDragging] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
 
   return (
     <motion.div
       drag
       dragControls={dragControls}
       dragMomentum={false}
-      dragElastic={0}
+      dragElastic={0.1}
       dragConstraints={containerRef}
       onDragStart={() => setIsDragging(true)}
-      onDragEnd={() => {
-        setIsDragging(false);
+      onDragEnd={() => setIsDragging(false)}
+      style={{
+        position: "fixed",
+        right: "30px",
+        bottom: "30px",
+        zIndex: 1000,
+        cursor: "grab",
       }}
-      animate={position}
+      whileTap={{ cursor: "grabbing" }}
       whileDrag={{ scale: 1.1 }}
       whileHover={{ scale: 1.05 }}
     >
       <Button
         type="primary"
+        shape="circle"
         size="large"
+        icon={<span style={{ fontSize: "24px", lineHeight: "0" }}>+</span>}
         onClick={() => {
           if (!isDragging) onClick();
         }}
-      >
-        +
-      </Button>
+        style={{
+          width: 56,
+          height: 56,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        }}
+      />
     </motion.div>
   );
 };
+
+function getPrimitiveFromRenderElement(renderElement: AnswerTypes): string {
+  switch (renderElement) {
+    case AnswerTypes.shortText:
+    case AnswerTypes.paragraph:
+    case AnswerTypes.date:
+    case AnswerTypes.time:
+      return "text";
+    case AnswerTypes.number:
+      return "number";
+    case AnswerTypes.radioButton:
+    case AnswerTypes.checkboxes:
+    case AnswerTypes.dropdown:
+      return "option";
+    case AnswerTypes.label:
+      return "label";
+    default:
+      console.warn(`Unhandled AnswerType: ${renderElement}`);
+      return "text";
+  }
+}
 
 interface DraggableQuestionItemProps {
   question: Field;
@@ -54,6 +90,7 @@ interface DraggableQuestionItemProps {
   firstQuestion: boolean;
   lastQuestion: boolean;
 }
+
 const DraggableQuestionItem: React.FC<DraggableQuestionItemProps> = ({
   question,
   onEdit,
@@ -67,17 +104,16 @@ const DraggableQuestionItem: React.FC<DraggableQuestionItemProps> = ({
   return (
     <Reorder.Item
       value={question}
-      key={question[1]} 
-      dragListener={!currentlyMobile} 
+      key={question[1]}
+      dragListener={!currentlyMobile}
       dragControls={dragControls}
-
       whileDrag={{
         scale: 1.03,
-        boxShadow: "0px 5px 15px rgba(0, 0, 0, 0.2)", 
-        zIndex: 10, 
-        cursor: "grabbing", 
+        boxShadow: "0px 5px 15px rgba(0, 0, 0, 0.2)",
+        zIndex: 10,
+        cursor: "grabbing",
       }}
-      style={{ cursor: "grab" }} 
+      style={{ cursor: "grab" }}
     >
       <QuestionCard
         question={question}
@@ -85,13 +121,16 @@ const DraggableQuestionItem: React.FC<DraggableQuestionItemProps> = ({
         onReorderKey={onReorderKey}
         firstQuestion={firstQuestion}
         lastQuestion={lastQuestion}
-        dragControls={dragControls} 
+        dragControls={dragControls}
       />
     </Reorder.Item>
   );
 };
 
 export const QuestionsList = () => {
+  const { message: messageApi } = App.useApp();
+  const [showAIGenerator, setShowAIGenerator] = useState(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -103,10 +142,23 @@ export const QuestionsList = () => {
     updateQuestionsList,
     setIsLeftMenuOpen,
     bottomElementRef,
+    updateFormName,
   } = useFormBuilderContext();
 
   const handleDescriptionChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     updateFormSetting({ description: e.target.value });
+  };
+
+  const AI_TYPE_TO_ANSWER_TYPE_MAP: { [key: string]: AnswerTypes } = {
+    ShortText: AnswerTypes.shortText,
+    LongText: AnswerTypes.paragraph,
+    Number: AnswerTypes.number,
+    Email: AnswerTypes.shortText,
+    Date: AnswerTypes.date,
+    Time: AnswerTypes.time,
+    MultipleChoice: AnswerTypes.radioButton,
+    Checkbox: AnswerTypes.checkboxes,
+    Dropdown: AnswerTypes.dropdown,
   };
 
   const onReorderKey = (keyType: "UP" | "DOWN", tempId: string) => {
@@ -114,19 +166,20 @@ export const QuestionsList = () => {
     const selectedQuestionIndex = questions.findIndex(
       (question: Field) => question[1] === tempId
     );
-    if (
-      (selectedQuestionIndex === 0 && keyType === "UP") ||
-      (selectedQuestionIndex === questions.length - 1 && keyType === "DOWN")
-    ) {
+    if (selectedQuestionIndex === -1) return;
+
+    const targetIndex =
+      keyType === "UP" ? selectedQuestionIndex - 1 : selectedQuestionIndex + 1;
+
+    if (targetIndex < 0 || targetIndex >= questions.length) {
       return;
     }
-    const order = keyType === "UP" ? -1 : +1;
-    if (selectedQuestionIndex !== -1) {
-      const replaceQuestion = questions[selectedQuestionIndex + order];
-      questions[selectedQuestionIndex + order] =
-        questions[selectedQuestionIndex];
-      questions[selectedQuestionIndex] = replaceQuestion;
-    }
+
+    [questions[selectedQuestionIndex], questions[targetIndex]] = [
+      questions[targetIndex],
+      questions[selectedQuestionIndex],
+    ];
+
     updateQuestionsList(questions);
   };
 
@@ -134,32 +187,102 @@ export const QuestionsList = () => {
     setIsLeftMenuOpen(true);
   };
 
+  const handleAIFormGenerated = (formData: GeneratedFormData) => {
+    console.log("AI Generated Data Received in QuestionsList:", formData);
+    try {
+      updateFormName(formData.title);
+      updateFormSetting({ description: formData.description || "" });
+
+      const mappedFields: Field[] = formData.fields.map((aiField) => {
+        const uniqueId = makeTag(6);
+        const fieldType = aiField.type;
+        const label = aiField.label;
+        const options = Array.isArray(aiField.options) ? aiField.options : [];
+
+        const defaultSettings: IAnswerSettings = {
+          renderElement:
+            AI_TYPE_TO_ANSWER_TYPE_MAP[fieldType] || AnswerTypes.shortText,
+          required: aiField.required || false,
+          validationRules: {},
+        };
+
+        const primitiveType = getPrimitiveFromRenderElement(
+          defaultSettings.renderElement as AnswerTypes
+        );
+
+        const mappedOptions = options.map((optionLabel) => [
+          makeTag(6),
+          optionLabel,
+          JSON.stringify({}),
+        ]);
+
+        const newField: Field = [
+          "field",
+          uniqueId,
+          primitiveType,
+          label,
+          JSON.stringify(mappedOptions),
+          JSON.stringify(defaultSettings),
+        ];
+        return newField;
+      });
+
+      updateQuestionsList(mappedFields);
+      setQuestionIdInFocus(undefined);
+      setShowAIGenerator(false);
+      messageApi.success("Form generated successfully from description!");
+    } catch (error) {
+      console.error("Error processing AI generated form data:", error);
+      messageApi.error("Failed to process the generated form data.");
+    }
+  };
+
   return (
     <StyleWrapper
       className="main-content"
-      onClick={() => setQuestionIdInFocus()}
+      onClick={() => setQuestionIdInFocus(undefined)}
       ref={containerRef}
-      style={{ position: "relative" }}
+      style={{ position: "relative", minHeight: "calc(100vh - 67px)" }}
     >
-      <div>
-        <FormTitle className="form-title" />
-        <DescriptionStyle>
-          <div className="form-description">
-            <Input.TextArea
-              key="description"
-              value={formSettings.description}
-              onChange={handleDescriptionChange}
-              autoSize
-            />
-          </div>
-        </DescriptionStyle>
+      <div style={{ padding: "10px 0", textAlign: "center" }}>
+        <Button
+          onClick={() => setShowAIGenerator((prev) => !prev)}
+          icon={<span role="img" aria-label="sparkles">✨</span>}
+        >
+          {showAIGenerator ? "Cancel AI Generation" : "Create with AI"}
+        </Button>
       </div>
-      <Reorder.Group
-        values={questionsList}
-        onReorder={updateQuestionsList}
-        className="reorder-group"
-      >
+
+      {showAIGenerator && (
+        <div style={{ marginBottom: "20px", padding: "0 10px" }}>
+          <LLMFormGenerator onFormGenerated={handleAIFormGenerated} />
+        </div>
+      )}
+
+      {!showAIGenerator && (
         <div>
+          <FormTitle className="form-title" />
+          <DescriptionStyle>
+            <div className="form-description">
+              <Input.TextArea
+                key="description"
+                value={formSettings.description}
+                onChange={handleDescriptionChange}
+                autoSize
+                placeholder="Add a form description (optional, supports Markdown)"
+              />
+            </div>
+          </DescriptionStyle>
+        </div>
+      )}
+
+      {!showAIGenerator && questionsList.length > 0 && (
+        <Reorder.Group
+          axis="y"
+          values={questionsList}
+          onReorder={updateQuestionsList}
+          className="reorder-group"
+        >
           {questionsList.map((question, idx) => (
             <DraggableQuestionItem
               key={question[1]}
@@ -170,14 +293,13 @@ export const QuestionsList = () => {
               lastQuestion={idx === questionsList.length - 1}
             />
           ))}
-          <div ref={bottomElementRef}></div>
-        </div>
-      </Reorder.Group>
+        </Reorder.Group>
+      )}
+
+      <div ref={bottomElementRef} style={{ height: "1px" }}></div>
+
       <div className="mobile-add-btn">
-        <FloatingButton
-          onClick={onPlusButtonClick}
-          containerRef={containerRef}
-        />
+        <FloatingButton onClick={onPlusButtonClick} containerRef={containerRef} />
       </div>
     </StyleWrapper>
   );
