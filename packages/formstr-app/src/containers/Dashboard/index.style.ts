@@ -31,6 +31,25 @@ export default styled.div`
       width: 100%;
       display: flex;
       justify-content: center;
+      align-items: center;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      color: inherit;
+
+  &:hover,
+  &:focus,
+  &:active {
+    background: rgba(0, 0, 0, 0.08);
+    color: inherit;
+    border: none;
+    box-shadow: none;
+  }
+    }
+    .anticon-down {
+      position: relative;
+      top: -2px;
+      font-size: 12px;
     }
   }
 `;
