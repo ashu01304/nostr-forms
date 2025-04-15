@@ -24,7 +24,6 @@ function FormSettings() {
       encryptForm: !checked,
     });
   };
-
   return (
     <StyleWrapper>
       <div className="form-setting">
