@@ -12,6 +12,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import { EditOutlined } from "@ant-design/icons";
 import { useEffect, useState } from "react";
+import DuplicateForm from "./DuplicateForm";
 
 interface FormEventCardProps {
   event: Event;
@@ -74,6 +75,7 @@ export const FormEventCard: React.FC<FormEventCardProps> = ({
           >
             <EditOutlined />
           </Button>
+
           ) : null}
           {onDeleted ? (
             <DeleteFormTrigger formKey={formKey} onDeleted={onDeleted} />
