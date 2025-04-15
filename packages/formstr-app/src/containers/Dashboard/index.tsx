@@ -132,12 +132,17 @@ export const Dashboard = () => {
 
   const menu = (
     <Menu>
-      <Menu.Item key="local" onClick={() => setFilter("local")}>
+      <Menu.Item 
+        key="local" 
+        onClick={() => setFilter("local")}
+        style={{ textAlign: "center", justifyContent: "center", display: "flex" }}
+      >
         {MENU_OPTIONS.local}
       </Menu.Item>
       <Menu.Item
         key="shared"
         onClick={() => setFilter("shared")}
+        style={{ textAlign: "center", justifyContent: "center", display: "flex" }}
         disabled={!pubkey}
       >
         {MENU_OPTIONS.shared}
@@ -145,11 +150,15 @@ export const Dashboard = () => {
       <Menu.Item
         key="myForms"
         onClick={() => setFilter("myForms")}
+        style={{ textAlign: "center", justifyContent: "center", display: "flex" }}
         disabled={!pubkey}
       >
         {MENU_OPTIONS.myForms}
       </Menu.Item>
-      <Menu.Item key="drafts" onClick={() => setFilter("drafts")}>
+      <Menu.Item key="drafts" 
+      onClick={() => setFilter("drafts")}
+      style={{ textAlign: "center", justifyContent: "center", display: "flex" }}
+      >
         {MENU_OPTIONS.drafts}
       </Menu.Item>
     </Menu>
