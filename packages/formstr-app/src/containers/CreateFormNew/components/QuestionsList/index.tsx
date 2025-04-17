@@ -234,12 +234,11 @@ export const QuestionsList = () => {
   };
 
   return (
-    <App>
     <StyleWrapper
       className="main-content"
       onClick={() => setQuestionIdInFocus()}
       ref={containerRef}
-      style={{ position: "relative", minHeight: "calc(100vh - 67px)" }}
+      style={{ position: "relative" }}
     >
       <div style={{ padding: "10px 0", textAlign: "center" }}>
         <Button
@@ -301,6 +300,5 @@ export const QuestionsList = () => {
         <FloatingButton onClick={onPlusButtonClick} containerRef={containerRef} />
       </div>
     </StyleWrapper>
-    </App>
   );
 };
