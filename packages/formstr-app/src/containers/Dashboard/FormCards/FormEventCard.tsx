@@ -66,15 +66,23 @@ export const FormEventCard: React.FC<FormEventCardProps> = ({
       extra={
         <div style={{ display: "flex", flexDirection: "row" }}>
           {secretKey ? (
+            <>
             <Button
-            type="text"
-            style={{color: "purple", marginRight: 5 }}
-            onClick={() =>
-              navigate(editPath(secretKey, formId, relay, viewKey))
-            }
-          >
-            <EditOutlined />
-          </Button>
+              type="text"
+              style={{color: "purple", marginRight: 5 }}
+              onClick={() =>
+                navigate(editPath(secretKey, formId, relay, viewKey))
+              }
+            >
+              <EditOutlined />
+            </Button>
+            <Button
+                type="text"
+                style={{ color: "purple", marginRight: 5 }}
+              >
+                <DuplicateForm tags={tags} />
+              </Button>
+          </>
 
           ) : null}
           {onDeleted ? (
