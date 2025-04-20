@@ -16,10 +16,8 @@ import { MyForms } from "./FormCards/MyForms";
 import { Drafts } from "./FormCards/Drafts";
 import { LocalForms } from "./FormCards/LocalForms";
 import { useNavigate } from "react-router-dom"; 
-import { availableTemplates, FormTemplate } from "../../templates";
+import { availableTemplates} from "../../templates";
 import { ROUTES } from "../../constants/routes";
-import { FormInitData } from "../CreateFormNew/providers/FormBuilder/typeDefs";
-import { createFormSpecFromTemplate } from "../../utils/formUtils";
 
 const MENU_OPTIONS = {
   local: "On this device",
@@ -42,7 +40,7 @@ export const Dashboard = () => {
     "local" | "shared" | "myForms" | "drafts"
   >("local");
 
-  const { poolRef, isTemplateModalOpen, closeTemplateModal } = useApplicationContext();
+  const { poolRef } = useApplicationContext();
 
   const subCloserRef = useRef<SubCloser | null>(null);
 
@@ -55,9 +53,10 @@ export const Dashboard = () => {
   };
 
   const fetchNostrForms = () => {
+    if (!pubkey) return;
     const queryFilter = {
       kinds: [30168],
-      "#p": [pubkey!],
+      "#p": [pubkey],
     };
 
     subCloserRef.current = poolRef.current.subscribeMany(
@@ -85,11 +84,6 @@ export const Dashboard = () => {
 
   const navigate = useNavigate();
 
-  const handleTemplateClick = (template: FormTemplate) => {
-    const { spec, id } = createFormSpecFromTemplate(template);
-    const navigationState: FormInitData = { spec, id };
-    navigate(ROUTES.CREATE_FORMS_NEW, { state: navigationState });
-  };
 
   const renderForms = () => {
     if (filter === "local") {
@@ -97,8 +91,9 @@ export const Dashboard = () => {
         return (
           <EmptyScreen
             templates={availableTemplates}
-            onTemplateClick={handleTemplateClick}
             message="No forms found on this device. Start by choosing a template:"
+            action={() => navigate(ROUTES.CREATE_FORMS_NEW)}
+            actionLabel="Create New Form"
           />
         );
       }
@@ -115,10 +110,9 @@ export const Dashboard = () => {
         return <EmptyScreen message="No forms shared with you." />;
       }
       return Array.from(nostrForms.values()).map((formEvent: Event) => {
-        let d_tag = formEvent.tags.filter((t) => t[0] === "d")[0]?.[1];
-        let key = `${formEvent.kind}:${formEvent.pubkey}:${
-          d_tag ? d_tag : null
-        }`;
+        let d_tag = formEvent.tags.find((t) => t[0] === "d")?.[1];
+        if (!d_tag) return null; 
+        let key = `${formEvent.kind}:${formEvent.pubkey}:${d_tag}`;
         return <FormEventCard key={key} event={formEvent} />;
       });
     } else if (filter === "myForms") {

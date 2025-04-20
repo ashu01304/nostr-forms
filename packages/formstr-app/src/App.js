@@ -3,6 +3,7 @@ import "./App.css";
 import Routing from "./components/Routing";
 import { ProfileProvider } from "./provider/ProfileProvider";
 import { ApplicationProvider } from "./provider/ApplicationProvider";
+import { TemplateProvider } from "./provider/TemplateProvider";
 
 function App() {
   return (
@@ -10,7 +11,9 @@ function App() {
       <div className="App">
         <ProfileProvider>
           <ApplicationProvider>
-            <Routing />
+            <TemplateProvider>
+              <Routing />
+            </TemplateProvider>
           </ApplicationProvider>
         </ProfileProvider>
       </div>
