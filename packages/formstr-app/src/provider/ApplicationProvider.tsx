@@ -1,5 +1,11 @@
 import React, { createContext, FC, ReactNode, useRef, useState } from "react";
 import { SimplePool } from "nostr-tools";
+import { useNavigate } from "react-router-dom";
+import TemplateSelectorModal from "../components/TemplateSelectorModal";
+import { FormTemplate } from "../templates";
+import { createFormSpecFromTemplate } from "../utils/formUtils";
+import { FormInitData } from "../containers/CreateFormNew/providers/FormBuilder/typeDefs";
+import { ROUTES } from "../constants/routes";
 
 interface ApplicationProviderProps {
   children?: ReactNode;
@@ -23,6 +29,13 @@ export const ApplicationProvider: FC<ApplicationProviderProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const openTemplateModal = () => setIsTemplateModalOpen(true); 
   const closeTemplateModal = () => setIsTemplateModalOpen(false);
+  const navigate = useNavigate();
+  const handleTemplateSelect = (template: FormTemplate) => {
+    const { spec, id } = createFormSpecFromTemplate(template);
+    const navigationState: FormInitData = { spec, id };
+    closeTemplateModal();
+    navigate(ROUTES.CREATE_FORMS_NEW, { state: navigationState });
+  };
   const contextValue: ApplicationContextType = {
     poolRef,
     isTemplateModalOpen,
@@ -33,6 +46,11 @@ export const ApplicationProvider: FC<ApplicationProviderProps> = ({
   return (
     <ApplicationContext.Provider value={ contextValue }>
       {children}
+      <TemplateSelectorModal
+        visible={isTemplateModalOpen}
+        onClose={closeTemplateModal}
+        onTemplateSelect={handleTemplateSelect}
+      />
     </ApplicationContext.Provider>
   );
 };

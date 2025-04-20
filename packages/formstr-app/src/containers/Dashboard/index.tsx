@@ -19,7 +19,6 @@ import { useNavigate } from "react-router-dom";
 import { availableTemplates, FormTemplate } from "../../templates";
 import { ROUTES } from "../../constants/routes";
 import { FormInitData } from "../CreateFormNew/providers/FormBuilder/typeDefs";
-import TemplateSelectorModal from "../../components/TemplateSelectorModal";
 import { createFormSpecFromTemplate } from "../../utils/formUtils";
 
 const MENU_OPTIONS = {
@@ -176,11 +175,6 @@ export const Dashboard = () => {
           </Dropdown>
         </div>
         <div className="form-cards-container">{renderForms()}</div>
-        <TemplateSelectorModal
-          visible={isTemplateModalOpen}
-          onClose={closeTemplateModal}
-          onTemplateSelect={handleTemplateClick}
-        />
         <>
           {state && (
             <FormDetails
