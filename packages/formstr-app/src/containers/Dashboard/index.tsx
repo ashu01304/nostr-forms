@@ -16,8 +16,10 @@ import { MyForms } from "./FormCards/MyForms";
 import { Drafts } from "./FormCards/Drafts";
 import { LocalForms } from "./FormCards/LocalForms";
 import { useNavigate } from "react-router-dom"; 
-import { availableTemplates} from "../../templates";
+import { availableTemplates, FormTemplate} from "../../templates";
 import { ROUTES } from "../../constants/routes";
+import { FormInitData } from "../CreateFormNew/providers/FormBuilder/typeDefs";
+import { createFormSpecFromTemplate } from "../../utils/formUtils";
 
 const MENU_OPTIONS = {
   local: "On this device",
@@ -43,7 +45,6 @@ export const Dashboard = () => {
   const { poolRef } = useApplicationContext();
 
   const subCloserRef = useRef<SubCloser | null>(null);
-
   const handleEvent = (event: Event) => {
     setNostrForms((prevMap) => {
       const newMap = new Map(prevMap);
@@ -84,6 +85,11 @@ export const Dashboard = () => {
 
   const navigate = useNavigate();
 
+  const handleTemplateClick = (template: FormTemplate) => {
+    const { spec, id } = createFormSpecFromTemplate(template);
+    const navigationState: FormInitData = { spec, id };
+    navigate(ROUTES.CREATE_FORMS_NEW, { state: navigationState });
+  };
 
   const renderForms = () => {
     if (filter === "local") {
@@ -91,6 +97,7 @@ export const Dashboard = () => {
         return (
           <EmptyScreen
             templates={availableTemplates}
+            onTemplateClick={handleTemplateClick}
             message="No forms found on this device. Start by choosing a template:"
             action={() => navigate(ROUTES.CREATE_FORMS_NEW)}
             actionLabel="Create New Form"
