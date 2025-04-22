@@ -14,6 +14,7 @@ import { Export } from "./Export";
 import { Field, Tag } from "../../nostr/types";
 import { useApplicationContext } from "../../hooks/useApplicationContext";
 import { ResponseDetailModal } from '../ResponsesNew/components/ResponseDetailModal';
+import { getDefaultRelays } from "../../nostr/common";
 
 const { Text } = Typography;
 
@@ -69,6 +70,10 @@ export const Response = () => {
         setEditKey(editKey);
       }
     }
+    let formRelays = formEvent.tags
+      .filter((t) => t[0] === "relay")
+      .map((r) => r[1]);
+    formRelays = formRelays.length ? formRelays : relay ? [relay] : getDefaultRelays()
     setFormEvent(formEvent);
     const formSpec = await getFormSpec(
       formEvent,
@@ -86,9 +91,11 @@ export const Response = () => {
       poolRef.current,
       handleResponseEvent,
       allowedPubkeys,
-      relay ? [relay!] : undefined,
+      formRelays
     )
     setResponsesCloser(responseCloser);
+
+    setResponses(responses);
   };
 
   useEffect(() => {
