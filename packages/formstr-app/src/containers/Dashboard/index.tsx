@@ -166,11 +166,10 @@ export const Dashboard = () => {
   };
 
   const menu = (
-    <Menu
-    style={{ textAlign: "center"}}>
+    <Menu style={{ textAlign: "center" }}>
       <Menu.Item 
-        key="local" 
-        onClick={() => setFilter("local")}
+        key="local"
+        onClick={() => handleFilterChange("local")}
       >
         {MENU_OPTIONS.local}
       </Menu.Item>
@@ -188,8 +187,9 @@ export const Dashboard = () => {
       >
         {MENU_OPTIONS.myForms}
       </Menu.Item>
-      <Menu.Item key="drafts" 
-      onClick={() => setFilter("drafts")}
+      <Menu.Item 
+        key="drafts"
+        onClick={() => handleFilterChange("drafts")}
       >
         {MENU_OPTIONS.drafts}
       </Menu.Item>
