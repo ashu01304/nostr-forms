@@ -375,7 +375,6 @@ export const Response = () => {
        formSpec={formSpec}
        editKey={editKey}
    />
-
     </div>
   );
 };
