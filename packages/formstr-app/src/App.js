@@ -11,13 +11,13 @@ function App() {
     <BrowserRouter>
         <HandleLegacyRoutes>
       <div className="App">
-        <ProfileProvider>
           <ApplicationProvider>
+        <ProfileProvider>
             <TemplateProvider>
               <Routing />
             </TemplateProvider>
-          </ApplicationProvider>
         </ProfileProvider>
+          </ApplicationProvider>
       </div>
         </HandleLegacyRoutes>
     </BrowserRouter>
