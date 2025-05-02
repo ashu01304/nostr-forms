@@ -13,6 +13,7 @@ import { fetchKeys, getAllowedUsers, getFormSpec } from "../../utils/formUtils";
 import { Export } from "./Export";
 import { Field, Tag } from "../../nostr/types";
 import { useApplicationContext } from "../../hooks/useApplicationContext";
+import { ResponseDetailModal } from '../ResponsesNew/components/ResponseDetailModal';
 
 const { Text } = Typography;
 
@@ -32,9 +33,8 @@ export const Response = () => {
   const { pubkey: userPubkey, requestPubkey } = useProfileContext();
   const viewKeyParams = searchParams.get("viewKey");
   const [responseCloser, setResponsesCloser] = useState<SubCloser | null>(null);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [selectedResponseData, setSelectedResponseData] = useState<ResponseDetailItem[]>([]);
-  const [selectedResponseMeta, setSelectedResponseMeta] = useState<{ author?: string, timestamp?: string }>({});
+  const [selectedEventForModal, setSelectedEventForModal] = useState<Event | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const handleResponseEvent = (event: Event) => {
     setResponses((prev = []) => {
         if (prev.some(e => e.id === event.id)) {
@@ -136,61 +136,6 @@ export const Response = () => {
     }
   };
 
-  const processResponseForModal = (event: Event): ResponseDetailItem[] => {
-    if (!formSpec) {
-         if (event.content !== "" && !editKey) return [{ key: 'error-no-spec-no-key', question: 'Error', answer: 'Cannot display details. Form specification is encrypted, and the required key is missing.' }];
-         return [{ key: 'error-no-spec', question: 'Error', answer: 'Could not load form specification to display question labels.' }];
-    }
-
-    const inputs = getInputs(event);
-    if (inputs.length === 0) {
-         if (event.content !== "" && !editKey) return [{ key: 'error-decrypt', question: 'Access Denied', answer: 'Cannot decrypt response content without the correct key.' }];
-         return [{ key: 'no-inputs', question: 'Info', answer: 'No response data found in this event.' }];
-    }
-
-
-    const details: ResponseDetailItem[] = inputs.map((inputTag) => {
-      const [_responsePlaceholder, fieldId, answerValue, metadataString] = inputTag;
-      const questionField = formSpec.find(
-        (tag): tag is Field => tag[0] === "field" && tag[1] === fieldId
-      );
-
-      let questionLabel = `Question ID: ${fieldId}`;
-      let displayAnswer = answerValue ?? "N/A";
-
-      if (questionField) {
-        questionLabel = questionField[3] || questionLabel;
-
-        if (questionField[2] === "option" && answerValue) {
-           try {
-               const choices = JSON.parse(questionField[4] || "[]") as Tag[];
-               const selectedChoiceIds = answerValue.split(';');
-               const choiceLabels = choices
-                   .filter(choice => selectedChoiceIds.includes(choice[0]))
-                   .map(choice => choice[1]);
-
-               if (choiceLabels.length > 0) {
-                   displayAnswer = choiceLabels.join(', ');
-               }
-
-               try {
-                   const metadata = JSON.parse(metadataString || "{}");
-                   if (metadata.message) {
-                       const otherChoice = choices.find(c => { try { return JSON.parse(c[2] || '{}')?.isOther === true; } catch { return false; } });
-                       if(otherChoice && selectedChoiceIds.includes(otherChoice[0])){
-                           displayAnswer += ` (${metadata.message})`;
-                       }
-                   }
-               } catch {}
-
-           } catch (e) {}
-        }
-      }
-      return { key: fieldId, question: questionLabel, answer: displayAnswer };
-    });
-    return details;
-  };
-
   const handleRowClick = (record: any) => {
      const authorPubKey = record.key;
      if (!responses) return;
@@ -198,14 +143,8 @@ export const Response = () => {
      if (authorEvents.length === 0) return;
      const latestEvent = authorEvents.sort((a, b) => b.created_at - a.created_at)[0];
 
-     const modalData = processResponseForModal(latestEvent);
-
-     setSelectedResponseData(modalData);
-     setSelectedResponseMeta({
-         author: record.authorPubkey,
-         timestamp: new Date(latestEvent.created_at * 1000).toLocaleString()
-     });
-     setIsModalVisible(true);
+     setSelectedEventForModal(latestEvent);
+     setIsModalOpen(true);
   };
 
   const getData = (useLabels: boolean = false) => {
@@ -419,43 +358,17 @@ export const Response = () => {
           />
         </div>
       </ResponseWrapper>
-      <Modal
-        title={
-          <Space direction="vertical" size="small">
-            <Text strong>Response Details</Text>
-            <Text type="secondary" style={{ fontSize: '0.9em' }}>
-              By: <Typography.Link href={`https://njump.me/${selectedResponseMeta.author}`} target="_blank" rel="noopener noreferrer">{selectedResponseMeta.author || 'Unknown'}</Typography.Link>
-            </Text>
-            <Text type="secondary" style={{ fontSize: '0.8em' }}>
-              Submitted: {selectedResponseMeta.timestamp || 'N/A'}
-            </Text>
-          </Space>
-        }
-        open={isModalVisible}
-        onCancel={() => setIsModalVisible(false)}
-        footer={[<Button key="close" onClick={() => setIsModalVisible(false)}> Close </Button>]}
-        width={900}
-      >
-        <Descriptions bordered column={1} size="small">
-          {selectedResponseData.map(item => (
-            <Descriptions.Item key={item.key} label={item.question}>
-              <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>
-                {item.answer}
-              </Typography.Text>
-            </Descriptions.Item>
-          ))}
-          {selectedResponseData.length > 0 && selectedResponseData[0]?.key?.startsWith('error-') && (
-            <Descriptions.Item key="error-info" label="Error">
-              {selectedResponseData[0].answer}
-            </Descriptions.Item>
-          )}
-          {selectedResponseData.length > 0 && selectedResponseData[0]?.key === 'no-inputs' && (
-            <Descriptions.Item key="no-data-info" label="Info">
-              {selectedResponseData[0].answer}
-            </Descriptions.Item>
-          )}
-        </Descriptions>
-      </Modal>
+      <ResponseDetailModal
+       isVisible={isModalOpen}
+       onClose={() => {
+           setIsModalOpen(false);
+           setSelectedEventForModal(null);
+       }}
+       event={selectedEventForModal}
+       formSpec={formSpec}
+       editKey={editKey}
+   />
+
     </div>
   );
 };
