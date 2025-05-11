@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal, Divider, message, Space, Alert } from 'antd';
+import { Modal, Divider, message, Space, Alert, Typography } from 'antd';
 import { ollamaService, OllamaModel, OllamaConfig } from '../../../../services/ollamaService'; 
 import { processOllamaFormData, ProcessedFormData } from '../../../../utils/aiProcessor'; 
 import { CREATE_FORM_TOOL_SCHEMA, CREATE_FORM_SYSTEM_PROMPT } from '../../../../constants/prompts'; 
@@ -140,7 +140,11 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({
 
     return (
         <Modal
-            title="Create Form with AI"
+            title={
+                <Typography.Title level={4} style={{ textAlign: 'center', margin: 0 }}>
+                    Create Form with AI
+                </Typography.Title>
+            }
             open={isOpen}
             onCancel={onClose}
             footer={null} 
@@ -148,7 +152,7 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({
             destroyOnClose 
             maskClosable={!generationLoading} 
         >
-            <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
                 <OllamaSettings
                     ollamaUrl={config.baseUrl}
                     onUrlChange={handleUrlChange}
