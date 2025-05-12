@@ -60,6 +60,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({
           <Title level={5}>2. Start Ollama Server (macOS / Linux / Windows)</Title>
           <Paragraph>
             Use the command block below based on your platform to start the Ollama server:
+            Make sure to <Text strong>restart Ollama</Text> after setting these environment variables if it's already running.
           </Paragraph>
 
           <Row gutter={16}>
@@ -67,7 +68,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({
               <Text strong>macOS / Linux / WSL</Text>
               <CodeBlock>
                 export OLLAMA_HOST=0.0.0.0:11434{'\n'}
-                export OLLAMA_ORIGINS='*'{'\n'}
+                export OLLAMA_ORIGINS='https://formstr.app,http://localhost:3000'{'\n'}
                 ollama serve
               </CodeBlock>
             </Col>
@@ -80,11 +81,25 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({
               <Text strong>Windows (PowerShell)</Text>
               <CodeBlock>
                 $env:OLLAMA_HOST="0.0.0.0:11434"{'\n'}
-                $env:OLLAMA_ORIGINS="*"{'\n'}
+                $env:OLLAMA_ORIGINS="https://formstr.app,http://localhost:3000"{'\n'}
                 ollama serve
               </CodeBlock>
             </Col>
           </Row>
+          <Paragraph type="secondary" style={{ marginTop: '12px' }}>
+            <Text strong>Note for Linux users (Persistence):</Text> If Ollama was installed as a system service, you might need to edit the service file to make these environment variables persistent.
+            For example, you might edit <Text code>/etc/systemd/system/ollama.service</Text> and add the variables under the <Text code>[Service]</Text> section, like so:
+            <CodeBlock>
+              [Service]{'\n'}
+              Environment="OLLAMA_HOST=0.0.0.0:11434"{'\n'}
+              Environment="OLLAMA_ORIGINS=https://formstr.app,http://localhost:3000"{'\n'}
+            </CodeBlock>
+            Then, reload the systemd daemon and restart Ollama:
+            <CodeBlock>
+              sudo systemctl daemon-reload{'\n'}
+              sudo systemctl restart ollama
+            </CodeBlock>
+          </Paragraph>
 
           <AntDivider style={{ marginTop: '20px' }} />
 

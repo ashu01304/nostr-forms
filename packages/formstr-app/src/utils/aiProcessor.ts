@@ -12,7 +12,6 @@ interface OllamaFormField {
     label: string;
     required?: boolean;
     options?: string[]; 
-    
 }
 export interface ProcessedFormData {
     fields: Field[];
@@ -32,6 +31,7 @@ const AI_TYPE_TO_INTERNAL_MAP: { [key: string]: { primitive: string; renderEleme
     Dropdown: { primitive: 'option', renderElement: AnswerTypes.dropdown },
     Date: { primitive: 'text', renderElement: AnswerTypes.date }, 
     Time: { primitive: 'text', renderElement: AnswerTypes.time },
+    Label: { primitive: 'label', renderElement: AnswerTypes.label },
     default: { primitive: 'text', renderElement: AnswerTypes.shortText }
 };
 

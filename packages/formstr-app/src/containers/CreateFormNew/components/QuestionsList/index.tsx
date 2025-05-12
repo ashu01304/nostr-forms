@@ -1,6 +1,6 @@
 import React, { ChangeEvent, useRef, useState } from "react";
 import QuestionCard from "../QuestionCard";
-import { Button, Input, message , Typography} from "antd"; 
+import { Button, Input, Typography} from "antd";
 import FormTitle from "../FormTitle";
 import StyleWrapper from "./style";
 import DescriptionStyle from "./description.style";
@@ -9,7 +9,6 @@ import { Reorder, motion, useDragControls, DragControls } from "framer-motion";
 import { Field } from "../../../../nostr/types";
 import { isMobile } from "../../../../utils/utility";
 import AIFormGeneratorModal from "../AIFormGeneratorModal";
-import { ProcessedFormData } from "../../../../utils/aiProcessor";
 
 const { Text } = Typography;
 interface FloatingButtonProps {
@@ -106,7 +105,6 @@ const DraggableQuestionItem: React.FC<DraggableQuestionItemProps> = ({
 };
 
 export const QuestionsList = () => {
-  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const {
     formSettings,
@@ -117,7 +115,9 @@ export const QuestionsList = () => {
     updateQuestionsList,
     setIsLeftMenuOpen,
     bottomElementRef,
-    updateFormName,
+    isAiModalOpen,
+    setIsAiModalOpen,
+    handleAIFormGenerated,
   } = useFormBuilderContext();
 
   const handleDescriptionChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
@@ -140,27 +140,6 @@ export const QuestionsList = () => {
   const onPlusButtonClick = () => {
     setIsLeftMenuOpen(true);
   };
-    const handleAIFormGenerated = (processedData: ProcessedFormData) => {
-        try {
-            console.log("Applying processed AI data:", processedData);
-            if (processedData.formName) {
-                updateFormName(processedData.formName);
-            }
-            if (processedData.description) {
-                updateFormSetting({ description: processedData.description });
-            }
-            if (processedData.fields && processedData.fields.length > 0) {
-                updateQuestionsList(processedData.fields);
-                setQuestionIdInFocus(undefined);
-            } else {
-                message.warning("AI generated data, but no fields were created.");
-            }
-        } catch (error) {
-            console.error("Error applying AI generated form data:", error);
-            const errorMsg = error instanceof Error ? error.message : "Failed to apply the generated form data.";
-            message.error(errorMsg);
-        }
-    };
 
   return (
     <StyleWrapper
@@ -169,59 +148,52 @@ export const QuestionsList = () => {
       ref={containerRef}
       style={{ position: "relative" }}
     >
-      <div style={{ padding: "10px", paddingBottom: "0px" , textAlign: "center" }}>
-        <Button
-            onClick={() => setIsAiModalOpen(true)}
-            icon={<span role="img" aria-label="sparkles">✨</span>}>
-            Create with AI
-        </Button>
-      </div>
-          <div>
-            <FormTitle className="form-title" />
-            <DescriptionStyle>
-              <div className="form-description">
-                <Input.TextArea
-                  key="description"
-                  value={formSettings.description}
-                  onChange={handleDescriptionChange}
-                  autoSize
-                  placeholder="Add a form description (optional, supports Markdown)"
-                />
-              </div>
-            </DescriptionStyle>
-          </div>
-
-          {questionsList.length > 0 ? (
-             <Reorder.Group
-               values={questionsList}
-               onReorder={updateQuestionsList}
-               className="reorder-group"
-             >
-               {questionsList.map((question, idx) => (
-                 <DraggableQuestionItem
-                   key={question[1]}
-                   question={question}
-                   onEdit={editQuestion}
-                   onReorderKey={onReorderKey}
-                   firstQuestion={idx === 0}
-                   lastQuestion={idx === questionsList.length - 1}
-                 />
-               ))}
-             </Reorder.Group>
-          ) : (
-             <div style={{ textAlign: 'center', padding: '40px', color: 'grey' }}>
-                    <Text type="secondary">No questions yet. Add some using the sidebar or "Create with AI".</Text>
-                </div>
-            )}
-            <div ref={bottomElementRef} style={{ height: "1px" }}></div>
-            <div className="mobile-add-btn">
-                <FloatingButton onClick={onPlusButtonClick} containerRef={containerRef} />
-            </div>
-            <AIFormGeneratorModal
-                isOpen={isAiModalOpen}
-                onClose={() => setIsAiModalOpen(false)}
-                onFormGenerated={handleAIFormGenerated}
+      <div>
+        <FormTitle className="form-title" />
+        <DescriptionStyle>
+          <div className="form-description">
+            <Input.TextArea
+              key="description"
+              value={formSettings.description}
+              onChange={handleDescriptionChange}
+              autoSize
+              placeholder="Add a form description (optional, supports Markdown)"
             />
-        </StyleWrapper>
-    );
+          </div>
+        </DescriptionStyle>
+      </div>
+
+      {questionsList.length > 0 ? (
+         <Reorder.Group
+           values={questionsList}
+           onReorder={updateQuestionsList}
+           className="reorder-group"
+         >
+           {questionsList.map((question, idx) => (
+             <DraggableQuestionItem
+               key={question[1]}
+               question={question}
+               onEdit={editQuestion}
+               onReorderKey={onReorderKey}
+               firstQuestion={idx === 0}
+               lastQuestion={idx === questionsList.length - 1}
+             />
+           ))}
+         </Reorder.Group>
+      ) : (
+         <div style={{ textAlign: 'center', padding: '40px', color: 'grey' }}>
+                <Text type="secondary">No questions yet. Add some using the sidebar or click "AI Builder" in the header.</Text>
+            </div>
+        )}
+        <div ref={bottomElementRef} style={{ height: "1px" }}></div>
+        <div className="mobile-add-btn">
+            <FloatingButton onClick={onPlusButtonClick} containerRef={containerRef} />
+        </div>
+        <AIFormGeneratorModal
+            isOpen={isAiModalOpen}
+            onClose={() => setIsAiModalOpen(false)}
+            onFormGenerated={handleAIFormGenerated}
+        />
+    </StyleWrapper>
+  );
 };

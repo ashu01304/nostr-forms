@@ -29,6 +29,7 @@ export const CREATE_FORM_TOOL_SCHEMA = {
               'Dropdown',
               'Date',
               'Time',
+              'Label',
              ],
           },
           label: {
