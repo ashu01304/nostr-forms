@@ -1,29 +1,23 @@
 import { useEffect, useState } from "react";
-import { Event, getPublicKey, nip19, nip44, SubCloser } from "nostr-tools";
+import { Event, getPublicKey, nip19, SubCloser } from "nostr-tools";
 import { useParams, useSearchParams } from "react-router-dom";
 import { fetchFormResponses } from "../../nostr/responses";
 import SummaryStyle from "./summary.style";
-import { Button, Card, Divider, Table, Typography, Modal, Descriptions, Space } from "antd";
+import { Button, Card, Divider, Table, Typography, Modal, Descriptions, Space, Spin } from "antd";
 import ResponseWrapper from "./Responses.style";
 import { isMobile } from "../../utils/utility";
 import { useProfileContext } from "../../hooks/useProfileContext";
 import { fetchFormTemplate } from "../../nostr/fetchFormTemplate";
 import { hexToBytes } from "@noble/hashes/utils";
-import { fetchKeys, getAllowedUsers, getFormSpec } from "../../utils/formUtils";
+import { fetchKeys, getAllowedUsers, getFormSpec as getFormSpecFromEventUtil } from "../../utils/formUtils"; 
 import { Export } from "./Export";
 import { Field, Tag } from "../../nostr/types";
 import { useApplicationContext } from "../../hooks/useApplicationContext";
-import { ResponseDetailModal } from '../ResponsesNew/components/ResponseDetailModal';
+import { ResponseDetailModal } from './components/ResponseDetailModal';
 import { getDefaultRelays } from "../../nostr/common";
-import { getResponseRelays } from "../../utils/ResponseUtils";
+import { getResponseRelays, getInputsFromResponseEvent, processResponseInputTag } from "../../utils/ResponseUtils"; 
 
 const { Text } = Typography;
-
-type ResponseDetailItem = {
-  key: string; 
-  question: string;
-  answer: string;
-};
 
 export const Response = () => {
   const [responses, setResponses] = useState<Event[] | undefined>(undefined);
@@ -38,6 +32,7 @@ export const Response = () => {
   const [selectedEventForModal, setSelectedEventForModal] = useState<Event | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   let { poolRef } = useApplicationContext();
+  const [isFormSpecLoading, setIsFormSpecLoading] = useState(true); 
 
   const handleResponseEvent = (event: Event) => {
     console.log("Got a response", event);
@@ -51,9 +46,10 @@ export const Response = () => {
 
   const initialize = async () => {
     if (!formId) return;
-
     if (!(pubKey || secretKey)) return;
-    if(!poolRef?.current) return
+    if(!poolRef?.current) return;
+    setIsFormSpecLoading(true); 
+
     if (secretKey) {
       setEditKey(secretKey);
       pubKey = getPublicKey(hexToBytes(secretKey));
@@ -68,40 +64,38 @@ export const Response = () => {
         if (!secretKey) {
           if (userPubkey) {
             let keys = await fetchKeys(event.pubkey, formId!, userPubkey);
-            let editKey = keys?.find((k) => k[0] === "EditAccess")?.[1] || null;
-            setEditKey(editKey);
+            let fetchedEditKey = keys?.find((k) => k[0] === "EditAccess")?.[1] || null;
+            setEditKey(fetchedEditKey);
           }
         }
-        let formRelays = getResponseRelays(event);
-        const formSpec = await getFormSpec(
+        const spec = await getFormSpecFromEventUtil(
           event,
           userPubkey,
           null,
           viewKeyParams
         );
-        setFormSpec(formSpec);
+        setFormSpec(spec);
+        setIsFormSpecLoading(false);
       },
       relay ? [relay!] : undefined
     );
   };
 
   useEffect(() => {
-    if (!formEvent) initialize();
+    if (!(pubKey || secretKey) || !formId || !poolRef?.current) return;
+    initialize();
     return () => {
       if (responseCloser) responseCloser.close();
     };
-  }, [poolRef]);
+  }, [pubKey, formId, secretKey, poolRef, userPubkey, viewKeyParams]);
 
   useEffect(() => {
-    console.log("not working?", formEvent, formId);
-    if (!formEvent) return;
-    if (!formId) return;
-    if (responses) return;
+    if (!formEvent || !formId || responses !== undefined) return;
     let allowedPubkeys;
     let pubkeys = getAllowedUsers(formEvent);
     if (pubkeys.length !== 0) allowedPubkeys = pubkeys;
     let formRelays = getResponseRelays(formEvent);
-    let responseCloser = fetchFormResponses(
+    let closer = fetchFormResponses(
       formEvent.pubkey,
       formId,
       poolRef.current,
@@ -127,36 +121,6 @@ export const Response = () => {
     return new Set(responses.map((r) => r.pubkey)).size;
   };
 
-  const getInputs = (responseEvent: Event): Tag[] => {
-    if (responseEvent.content === "") {
-      return responseEvent.tags.filter((tag): tag is Tag => Array.isArray(tag) && tag[0] === "response");
-    } else if (editKey) {
-      try {
-        let conversationKey = nip44.v2.utils.getConversationKey(
-          editKey,
-          responseEvent.pubkey
-        );
-        let decryptedContent = nip44.v2.decrypt(
-          responseEvent.content,
-          conversationKey
-        );
-         const parsed = JSON.parse(decryptedContent);
-         if(Array.isArray(parsed)) {
-             return parsed.filter(
-               (tag: Tag): tag is Tag => Array.isArray(tag) && tag[0] === "response"
-             );
-         }
-         return [];
-      } catch (e) {
-          console.error("Failed to parse decrypted response content:", e);
-          return [];
-      }
-    } else {
-      console.warn("Cannot decrypt response: EditKey not available.");
-      return [];
-    }
-  };
-
   const handleRowClick = (record: any) => {
      const authorPubKey = record.key;
      if (!responses) return;
@@ -172,7 +136,7 @@ export const Response = () => {
     let answers: Array<{
       [key: string]: string;
     }> = [];
-    if (!formSpec || !responses) return;
+    if (!formSpec || !responses) return answers; 
     let responsePerPubkey = new Map<string, Event[]>();
     responses.forEach((r: Event) => {
       let existingResponse = responsePerPubkey.get(r.pubkey);
@@ -182,47 +146,28 @@ export const Response = () => {
 
     Array.from(responsePerPubkey.keys()).forEach((pub) => {
       let pubkeyResponses = responsePerPubkey.get(pub);
-      if (!pubkeyResponses || pubkeyResponses.length == 0) return;
-      let response = pubkeyResponses.sort(
+      if (!pubkeyResponses || pubkeyResponses.length === 0) return;
+      let responseEvent = pubkeyResponses.sort( 
         (a, b) => b.created_at - a.created_at
       )[0];
-      let inputs = getInputs(response) as Tag[];
-      if (inputs.length === 0) return;
+      let inputs = getInputsFromResponseEvent(responseEvent, editKey) as Tag[]; 
+      if (inputs.length === 0 && responseEvent.content !== "" && !editKey) { 
+        console.warn(`Could not decrypt response for ${nip19.npubEncode(responseEvent.pubkey)} for table row.`);
+      }
+
       let answerObject: {
         [key: string]: string;
       } = {
-        key: response.pubkey,
-        createdAt: new Date(response.created_at * 1000).toDateString(),
-        authorPubkey: nip19.npubEncode(response.pubkey),
+        key: responseEvent.pubkey,
+        createdAt: new Date(responseEvent.created_at * 1000).toDateString(),
+        authorPubkey: nip19.npubEncode(responseEvent.pubkey),
         responsesCount: pubkeyResponses.length.toString(),
       };
       inputs.forEach((input) => {
         if (!Array.isArray(input) || input.length < 2) return;
-        let questionField = formSpec.find(
-          (t) => t[0] === "field" && t[1] === input[1]
-        );
-        let question = questionField?.[3];
-        const label = useLabels ? question || input[1] : input[1];
-        let responseLabel = input[2] || "";
-        if (questionField && questionField[2] === "option") {
-          let choices = JSON.parse(questionField[4]) as Tag[];
-          let choiceField = choices.filter((choice) => {
-            return choice[0] === input[2];
-          })?.[0];
-          if (choiceField && choiceField[1]) responseLabel = choiceField[1];
-          if (input.length > 3) {
-            try {
-              const metadata = JSON.parse(input[3] || "{}");
-              if (metadata.message) {
-                const otherChoice = choices.find(c => { try { return JSON.parse(c[2] || '{}')?.isOther === true; } catch { return false; } });
-                if (otherChoice && input[2].split(';').includes(otherChoice[0])) {
-                  responseLabel += ` (${metadata.message})`;
-                }
-              }
-            } catch {}
-          }
-        }
-        answerObject[label] = responseLabel;
+        const { questionLabel, responseLabel, fieldId } = processResponseInputTag(input, formSpec);
+        const displayKey = useLabels ? questionLabel : fieldId;
+        answerObject[displayKey] = responseLabel;
       });
       answers.push(answerObject);
     });
@@ -230,11 +175,10 @@ export const Response = () => {
   };
 
   const getFormName = () => {
-    if (!formSpec) return "Form Details Unnaccessible";
-
+    if (!formSpec) return "Loading Form Name..."; 
     let nameTag = formSpec.find((tag) => tag[0] === "name");
-    if (nameTag) return nameTag[1] || "";
-    return "";
+    if (nameTag) return nameTag[1] || "Untitled Form";
+    return "Untitled Form";
   };
 
   const getColumns = () => {
@@ -244,21 +188,21 @@ export const Response = () => {
       dataIndex: string;
       fixed?: "left" | "right";
       width?: number;
-      render?: (data: string) => JSX.Element;
+      render?: (data: string, record: any) => JSX.Element;
     }> = [
       {
         key: "author",
         title: "Author",
         fixed: "left",
         dataIndex: "authorPubkey",
-        width: 1.2,
+        width: isMobile() ? 120 : 150,
         render: (data: string) => (
           <a
             href={`https://njump.me/${data}`}
             target="_blank"
             rel="noopener noreferrer"
           >
-            {data}
+            {isMobile() ? `${data.substring(0,10)}...${data.substring(data.length-5)}` : data}
           </a>
         ),
       },
@@ -266,7 +210,7 @@ export const Response = () => {
         key: "responsesCount",
         title: "Submissions",
         dataIndex: "responsesCount",
-        width: 1.2,
+        width: isMobile() ? 90 : 120,
       },
     ];
     const rightColumns: Array<{
@@ -279,14 +223,14 @@ export const Response = () => {
     }> = [
       {
         key: "createdAt",
-        title: "Created At",
+        title: "Submitted At",
         dataIndex: "createdAt",
-        width: 1,
+        width: isMobile() ? 100 : 130,
       },
     ];
     let uniqueQuestionIds: Set<string> = new Set();
     responses?.forEach((response: Event) => {
-      let responseTags = getInputs(response);
+      let responseTags = getInputsFromResponseEvent(response, editKey);
       responseTags.forEach((t: Tag) => {
         if (Array.isArray(t) && t.length > 1) uniqueQuestionIds.add(t[1]);
       });
@@ -294,29 +238,31 @@ export const Response = () => {
     let fields =
       formSpec?.filter((field) => field[0] === "field") || ([] as Field[]);
 
-    let extraFields = Array.from(uniqueQuestionIds).filter(
-      (f) => !fields.map((field) => field[1]).includes(f)
-    );
     fields.forEach((field) => {
       let [_, fieldId, __, label, ___, ____] = field;
       columns.push({
         key: fieldId,
-        title: label,
+        title: label || `Question: ${fieldId.substring(0,5)}...`,
         dataIndex: label || fieldId,
-        width: 1.5,
+        width: 150,
       });
+      uniqueQuestionIds.delete(fieldId); 
     });
+    const extraFields = Array.from(uniqueQuestionIds); 
     extraFields.forEach((q) => {
       columns.push({
         key: q,
-        title: q,
-        dataIndex: q,
-        width: 1.5,
+        title: `Question ID: ${q.substring(0,8)}...`, 
+        dataIndex: q, 
+        width: 150,
       });
     });
-    if (formSpec === null && responses && uniqueQuestionIds.size > 0) {
-      uniqueQuestionIds.forEach(id => {
-        columns.push({ key: id, title: `Question ID: ${id}`, dataIndex: id, width: 1.5 });
+    if (formSpec === null && responses && extraFields.length > 0 && fields.length === 0) { 
+      extraFields.forEach(id => {
+         
+        if (!columns.find(col => col.key === id)) {
+            columns.push({ key: id, title: `Question ID: ${id.substring(0,8)}...`, dataIndex: id, width: 150 });
+        }
       });
     }
     return [...columns, ...rightColumns];
@@ -324,20 +270,33 @@ export const Response = () => {
 
   if (!(pubKey || secretKey) || !formId) return <Text>Invalid url</Text>;
 
-  if (formEvent && formEvent.content !== "" && !userPubkey && !viewKeyParams)
+  if (formEvent && formEvent.content !== "" && !userPubkey && !viewKeyParams && !editKey) { 
     return (
-      <>
-        <Text>This form is private, you need to login to view the form</Text>
+      <div style={{ textAlign: 'center', marginTop: '20px' }}>
+        <Text>This form's responses are private. You need to login or have a view key to see them.</Text>
         <Button
           onClick={() => {
             requestPubkey();
           }}
+          style={{ marginTop: '10px' }}
         >
-          {" "}
-          login{" "}
+          Login
         </Button>
-      </>
+      </div>
     );
+  }
+  if (isFormSpecLoading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+        <Spin size="large" tip="Loading form details..." />
+      </div>
+    );
+  }
+  if (formSpec === null && formEvent && formEvent.content !== "") { 
+     return <div style={{ textAlign: 'center', marginTop: '20px' }}>
+              <Text>Could not load or decrypt form specification. Responses cannot be displayed.</Text>
+            </div>;
+  }
 
   return (
     <div>
@@ -361,7 +320,7 @@ export const Response = () => {
           <Table
             columns={getColumns()}
             dataSource={getData(true)}
-            pagination={false}
+            pagination={{ pageSize: 10 }} 
             loading={{
               spinning: responses === undefined,
               tip: "🔎 Looking for responses...",
@@ -371,7 +330,13 @@ export const Response = () => {
               return {
                 onClick: (event) => {
                   event.stopPropagation();
-                  handleRowClick(record);
+                  
+                  if (formSpec && formSpec.length > 0) {
+                    handleRowClick(record);
+                  } else {
+                    console.warn("Form specification not ready, cannot open details modal.");
+                    
+                  }
                 },
                 style: { cursor: 'pointer' }
               };
@@ -379,16 +344,18 @@ export const Response = () => {
           />
         </div>
       </ResponseWrapper>
-      <ResponseDetailModal
-       isVisible={isModalOpen}
-       onClose={() => {
-           setIsModalOpen(false);
-           setSelectedEventForModal(null);
-       }}
-       event={selectedEventForModal}
-       formSpec={formSpec}
-       editKey={editKey}
-   />
+      {isModalOpen && formSpec && formSpec.length > 0 && (
+        <ResponseDetailModal
+          isVisible={isModalOpen}
+          onClose={() => {
+              setIsModalOpen(false);
+              setSelectedEventForModal(null);
+          }}
+          responseEvent={selectedEventForModal}
+          formSpec={formSpec} 
+          editKey={editKey}
+        />
+      )}
     </div>
   );
 };
