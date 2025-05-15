@@ -3,6 +3,7 @@ import "./App.css";
 import Routing from "./components/Routing";
 import { ProfileProvider } from "./provider/ProfileProvider";
 import { ApplicationProvider } from "./provider/ApplicationProvider";
+import { TemplateProvider } from "./provider/TemplateProvider";
 import { HandleLegacyRoutes } from "./components/HandleLegacyRoutes";
 
 function App() {
@@ -12,7 +13,9 @@ function App() {
       <div className="App">
         <ApplicationProvider>
           <ProfileProvider>
-            <Routing />
+            <TemplateProvider>
+              <Routing />
+            </TemplateProvider>
           </ProfileProvider>
         </ApplicationProvider>
       </div>
