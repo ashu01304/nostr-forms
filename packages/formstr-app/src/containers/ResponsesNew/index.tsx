@@ -37,17 +37,17 @@ export const Response = () => {
   const [responseCloser, setResponsesCloser] = useState<SubCloser | null>(null);
   const [selectedEventForModal, setSelectedEventForModal] = useState<Event | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const handleResponseEvent = (event: Event) => {
-const handleResponseEvent = (event: Event) => {
-  console.log("Got a response", event);
-  setResponses((prev = []) => {
-    if (prev.some(e => e.id === event.id)) {
-      return prev;
-    }
-    return [...prev, event];
-  });
-};
   let { poolRef } = useApplicationContext();
+
+  const handleResponseEvent = (event: Event) => {
+    console.log("Got a response", event);
+    setResponses((prev: Event[] | undefined) => {
+      if (prev?.some(e => e.id === event.id)) {
+        return prev;
+      }
+      return [...(prev || []), event];
+    });
+  };
 
   const initialize = async () => {
     if (!formId) return;
@@ -110,17 +110,17 @@ const handleResponseEvent = (event: Event) => {
       formRelays
     );
     setResponsesCloser(responseCloser);
+  }, [formEvent]);
 
-    setResponses(responses);
-useEffect(() => {
-  if (!(pubKey || secretKey) || !formId || !poolRef?.current) return;
-  if (responses === undefined && formEvent === undefined) {
-    initialize();
-  }
-  return () => {
-    if (responseCloser) responseCloser.close();
-  };
-}, [pubKey, formId, secretKey, poolRef, userPubkey, viewKeyParams]);
+  useEffect(() => {
+    if (!(pubKey || secretKey) || !formId || !poolRef?.current) return;
+    if (responses === undefined && formEvent === undefined) {
+      initialize();
+    }
+    return () => {
+      if (responseCloser) responseCloser.close();
+    };
+  }, [pubKey, formId, secretKey, poolRef, userPubkey, viewKeyParams]);
 
   const getResponderCount = () => {
     if (!responses) return 0;
