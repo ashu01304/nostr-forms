@@ -2,6 +2,7 @@ import React from 'react';
 import { Input, Space, Typography, Tooltip, Collapse, Row, Col, Divider as AntDivider } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import { OllamaSettingsProps } from './types';
+const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
 
 const { Text, Paragraph, Link, Title } = Typography;
 const { Panel } = Collapse;
@@ -68,7 +69,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({
               <Text strong>macOS / Linux / WSL</Text>
               <CodeBlock>
                 export OLLAMA_HOST=0.0.0.0:11434{'\n'}
-                export OLLAMA_ORIGINS='https://formstr.app,http://localhost:3000'{'\n'}
+                export OLLAMA_ORIGINS='{currentOrigin}'{'\n'}
                 ollama serve
               </CodeBlock>
             </Col>
@@ -81,7 +82,7 @@ const OllamaSettings: React.FC<OllamaSettingsProps> = ({
               <Text strong>Windows (PowerShell)</Text>
               <CodeBlock>
                 $env:OLLAMA_HOST="0.0.0.0:11434"{'\n'}
-                $env:OLLAMA_ORIGINS="https://formstr.app,http://localhost:3000"{'\n'}
+                $env:OLLAMA_ORIGINS="{currentOrigin}"{'\n'}
                 ollama serve
               </CodeBlock>
             </Col>
