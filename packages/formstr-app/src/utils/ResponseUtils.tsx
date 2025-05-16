@@ -52,7 +52,7 @@ export interface DisplayableAnswerDetail {
   fieldId: string;
 }
 
-export const processResponseInputTag = (
+export const getResponseLabels = (
   inputTag: Tag,
   formSpec: Tag[] 
 ): DisplayableAnswerDetail => {

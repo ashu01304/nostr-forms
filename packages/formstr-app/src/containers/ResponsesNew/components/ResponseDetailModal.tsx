@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Descriptions, Typography, Button, Space } from 'antd';
 import { Event, nip19 } from 'nostr-tools';
-import { Tag, Field } from '../../../nostr/types';
-import { getInputsFromResponseEvent, processResponseInputTag, DisplayableAnswerDetail,} from '../../../utils/ResponseUtils';
+import { Tag } from '../../../nostr/types';
+import {getResponseLabels, DisplayableAnswerDetail} from '../../../utils/ResponseUtils';
 
 const { Text } = Typography;
 
@@ -14,56 +14,50 @@ type ResponseDetailItem = {
 interface ResponseDetailModalProps {
   isVisible: boolean;
   onClose: () => void;
-  responseEvent: Event | null; 
   formSpec: Tag[];
-  editKey: string | undefined | null; 
+  processedInputs: Tag[];
+  responseMetadataEvent: Event | null; 
 }
 export const ResponseDetailModal: React.FC<ResponseDetailModalProps> = ({
   isVisible,
   onClose,
-  responseEvent,
   formSpec,
-  editKey,
+  processedInputs,
+  responseMetadataEvent,
 }) => {
   const [processedData, setProcessedData] = useState<ResponseDetailItem[]>([]);
   const [metaData, setMetaData] = useState<{ author?: string, timestamp?: string }>({});
 
-
-  const processEventForDisplay = (
-    currentResponseEvent: Event,
+  const processInputsForDisplay = (
+    currentProcessedInputs: Tag[],
     currentFormSpec: Tag[],
-    currentEditKey: string | undefined | null
   ): ResponseDetailItem[] => {
-    const inputs = getInputsFromResponseEvent(currentResponseEvent, currentEditKey);
-    if (inputs.length === 0) {
-      if (currentResponseEvent.content !== "" && !currentEditKey) {
-        return [{ key: 'error-decrypt', question: 'Access Denied', answer: 'Cannot decrypt response content without the correct key.' }];
-      }
-      return [{ key: 'no-inputs', question: 'Info', answer: 'No response data found in this event.' }];
+    if (!currentProcessedInputs || currentProcessedInputs.length === 0) {
+      return [{ key: 'no-inputs-processed', question: 'Info', answer: 'No displayable response data available or decryption failed.' }];
     }
-    const details: ResponseDetailItem[] = inputs.map((inputTag) => {
-      const { questionLabel, responseLabel, fieldId } = processResponseInputTag(inputTag, currentFormSpec);
+    const details: ResponseDetailItem[] = currentProcessedInputs.map((inputTag) => {
+      const { questionLabel, responseLabel, fieldId } = getResponseLabels(inputTag, currentFormSpec);
       return { key: fieldId, question: questionLabel, answer: responseLabel };
     });
     return details;
   };
 
   useEffect(() => {
-    if (isVisible && responseEvent) {
-      const authorNpub = nip19.npubEncode(responseEvent.pubkey);
-      const timestamp = new Date(responseEvent.created_at * 1000).toLocaleString();
+    if (isVisible && responseMetadataEvent && processedInputs) {
+      const authorNpub = nip19.npubEncode(responseMetadataEvent.pubkey);
+      const timestamp = new Date(responseMetadataEvent.created_at * 1000).toLocaleString();
       setMetaData({ author: authorNpub, timestamp });
       if (formSpec && formSpec.length > 0) {
-        const data = processEventForDisplay(responseEvent, formSpec, editKey);
+        const data = processInputsForDisplay(processedInputs, formSpec);
         setProcessedData(data);
       } else {
-        setProcessedData([{ key: 'loading-spec', question: 'Status', answer: 'Waiting for form details...' }]);
+        setProcessedData([{ key: 'loading-spec-modal', question: 'Status', answer: 'Waiting for form details...' }]);
       }
     } else {
       setProcessedData([]);
       setMetaData({});
     }
-  }, [isVisible, responseEvent, formSpec, editKey]); 
+  }, [isVisible, responseMetadataEvent, processedInputs, formSpec]); 
 
   return (
     <Modal
@@ -92,8 +86,8 @@ export const ResponseDetailModal: React.FC<ResponseDetailModalProps> = ({
             </Typography.Text>
           </Descriptions.Item>
         ))}
-        {processedData.length > 0 && (processedData[0]?.key?.startsWith('error-') || processedData[0]?.key === 'no-inputs' || processedData[0]?.key === 'loading-spec') && (
-          <Descriptions.Item key="info-state" label={processedData[0].question}>
+        {processedData.length > 0 && (processedData[0]?.key?.startsWith('no-inputs') || processedData[0]?.key?.startsWith('loading-spec')) && (
+          <Descriptions.Item key="info-state-modal" label={processedData[0].question}>
             {processedData[0].answer}
           </Descriptions.Item>
         )}
