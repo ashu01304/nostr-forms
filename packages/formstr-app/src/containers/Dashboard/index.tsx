@@ -16,10 +16,9 @@ import { MyForms } from "./FormCards/MyForms";
 import { Drafts } from "./FormCards/Drafts";
 import { LocalForms } from "./FormCards/LocalForms";
 import { useNavigate } from "react-router-dom"; 
-import { availableTemplates, FormTemplate } from "../../templates";
+import { availableTemplates, FormTemplate} from "../../templates";
 import { ROUTES } from "../../constants/routes";
 import { FormInitData } from "../CreateFormNew/providers/FormBuilder/typeDefs";
-import TemplateSelectorModal from "../../components/TemplateSelectorModal";
 import { createFormSpecFromTemplate } from "../../utils/formUtils";
 
 const MENU_OPTIONS = {
@@ -62,9 +61,10 @@ export const Dashboard = () => {
   
   const [filter, setFilter] = useState<FilterType>(getCurrentFilterFromPath());
 
-  const { poolRef, isTemplateModalOpen, closeTemplateModal } = useApplicationContext();
+  const { poolRef } = useApplicationContext();
 
   const subCloserRef = useRef<SubCloser | null>(null);
+
 
   useEffect(() => {
     const currentFilter = getCurrentFilterFromPath();
@@ -80,9 +80,10 @@ export const Dashboard = () => {
   };
 
   const fetchNostrForms = () => {
+    if (!pubkey) return;
     const queryFilter = {
       kinds: [30168],
-      "#p": [pubkey!],
+      "#p": [pubkey],
     };
 
     subCloserRef.current = poolRef.current.subscribeMany(
@@ -124,6 +125,8 @@ export const Dashboard = () => {
             templates={availableTemplates}
             onTemplateClick={handleTemplateClick}
             message="No forms found on this device. Start by choosing a template:"
+            action={() => navigate(ROUTES.CREATE_FORMS_NEW)}
+            actionLabel="Create New Form"
           />
         );
       }
@@ -140,10 +143,9 @@ export const Dashboard = () => {
         return <EmptyScreen message="No forms shared with you." />;
       }
       return Array.from(nostrForms.values()).map((formEvent: Event) => {
-        let d_tag = formEvent.tags.filter((t) => t[0] === "d")[0]?.[1];
-        let key = `${formEvent.kind}:${formEvent.pubkey}:${
-          d_tag ? d_tag : null
-        }`;
+        let d_tag = formEvent.tags.find((t) => t[0] === "d")?.[1];
+        if (!d_tag) return null; 
+        let key = `${formEvent.kind}:${formEvent.pubkey}:${d_tag}`;
         return <FormEventCard key={key} event={formEvent} />;
       });
     } else if (filter === "myForms") {
@@ -211,11 +213,6 @@ export const Dashboard = () => {
           </Dropdown>
         </div>
         <div className="form-cards-container">{renderForms()}</div>
-        <TemplateSelectorModal
-          visible={isTemplateModalOpen}
-          onClose={closeTemplateModal}
-          onTemplateSelect={handleTemplateClick}
-        />
         <>
           {state && (
             <FormDetails
