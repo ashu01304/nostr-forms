@@ -59,6 +59,7 @@ export const FormEventCard: React.FC<FormEventCardProps> = ({
     );
   }
 
+  const buttonStyle = { color: "purple", marginRight: 5 };
   return (
     <Card
       title={name[1] || "Hidden Form"}
@@ -67,19 +68,13 @@ export const FormEventCard: React.FC<FormEventCardProps> = ({
         <div style={{ display: "flex", flexDirection: "row" }}>
           {secretKey ? (
             <>
-            <Button
-              type="text"
-              style={{color: "purple", marginRight: 5 }}
-              onClick={() =>
+            <Button type="text" style={buttonStyle} onClick={() =>
                 navigate(editPath(secretKey, formId, relay, viewKey))
               }
             >
               <EditOutlined />
             </Button>
-            <Button
-                type="text"
-                style={{ color: "purple", marginRight: 5 }}
-              >
+                <Button type="text" style={buttonStyle}>
                 <DuplicateForm tags={tags} />
               </Button>
           </>
