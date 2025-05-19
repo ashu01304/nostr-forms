@@ -82,24 +82,28 @@ export const FormEventCard: React.FC<FormEventCardProps> = ({
       className="form-card"
       extra={
         <div style={{ display: "flex", flexDirection: "row" }}>
-          <DownloadOutlined
+          <Button
+            type="text"
+            style={buttonStyle}
             onClick={downloadForm}
-            style={{
-              color: "purple",
-              marginBottom: 3,
-              marginRight: 14,
-              cursor: "pointer",
-            }}
-          />
+            aria-label="Download form"
+          >
+            <DownloadOutlined />
+          </Button>
           {secretKey ? (
             <>
-            <Button type="text" style={buttonStyle} onClick={() =>
+            <Button 
+            type="text" 
+            style={buttonStyle} 
+            onClick={() =>
                 navigate(editPath(secretKey, formId, relay, viewKey))
               }
             >
               <EditOutlined />
             </Button>
-                <Button type="text" style={buttonStyle}>
+                <Button 
+                type="text" 
+                style={buttonStyle}>
                 <DuplicateForm tags={tags} />
               </Button>
           </>
