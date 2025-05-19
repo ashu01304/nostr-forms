@@ -3,14 +3,18 @@ import { Button, Card, Divider } from "antd";
 import { Event } from "nostr-tools";
 import { useNavigate } from "react-router-dom";
 import DeleteFormTrigger from "./DeleteForm";
-import { naddrUrl } from "../../../utils/utility";
+import {
+  downloadHTMLToDevice,
+  makeFormNAddr,
+  naddrUrl,
+} from "../../../utils/utility";
 import {
   editPath,
   getDecryptedForm,
   responsePath,
 } from "../../../utils/formUtils";
 import ReactMarkdown from "react-markdown";
-import { EditOutlined } from "@ant-design/icons";
+import { DownloadOutlined, EditOutlined } from "@ant-design/icons";
 import { useEffect, useState } from "react";
 import DuplicateForm from "./DuplicateForm";
 
@@ -55,17 +59,38 @@ export const FormEventCard: React.FC<FormEventCardProps> = ({
   let settings: { description?: string } = {};
   if (publicForm || viewKey) {
     settings = JSON.parse(
-      tags.filter((t) => t[0] === "settings")?.[0]?.[1] || "{}"
+      tags.filter((t) => t[0] === "settings")?.[0]?.[1] || "{}",
     );
   }
 
   const buttonStyle = { color: "purple", marginRight: 5 };
+  const downloadForm = async () => {
+    const naddr = makeFormNAddr(
+      pubKey,
+      formId,
+      relays.length ? relays : ["wss://relay.damus.io"],
+    );
+    const formFillerUI = (await (await fetch("/api/form-filler-ui")).text())
+      ?.replace("@naddr", naddr)
+      .replace("@viewKey", viewKey || "");
+    downloadHTMLToDevice(formFillerUI, name[1]);
+  };
+
   return (
     <Card
       title={name[1] || "Hidden Form"}
       className="form-card"
       extra={
         <div style={{ display: "flex", flexDirection: "row" }}>
+          <DownloadOutlined
+            onClick={downloadForm}
+            style={{
+              color: "purple",
+              marginBottom: 3,
+              marginRight: 14,
+              cursor: "pointer",
+            }}
+          />
           {secretKey ? (
             <>
             <Button type="text" style={buttonStyle} onClick={() =>
@@ -135,8 +160,8 @@ export const FormEventCard: React.FC<FormEventCardProps> = ({
                   pubKey,
                   formId,
                   relays.length ? relays : ["wss://relay.damus.io"],
-                  viewKey
-                )
+                  viewKey,
+                ),
               );
             }}
             style={{

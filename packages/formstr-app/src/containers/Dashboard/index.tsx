@@ -16,10 +16,9 @@ import { MyForms } from "./FormCards/MyForms";
 import { Drafts } from "./FormCards/Drafts";
 import { LocalForms } from "./FormCards/LocalForms";
 import { useNavigate } from "react-router-dom"; 
-import { availableTemplates, FormTemplate } from "../../templates";
+import { availableTemplates, FormTemplate} from "../../templates";
 import { ROUTES } from "../../constants/routes";
 import { FormInitData } from "../CreateFormNew/providers/FormBuilder/typeDefs";
-import TemplateSelectorModal from "../../components/TemplateSelectorModal";
 import { createFormSpecFromTemplate } from "../../utils/formUtils";
 
 const MENU_OPTIONS = {
@@ -29,23 +28,48 @@ const MENU_OPTIONS = {
   drafts: "Drafts",
 };
 
+type FilterType = "local" | "shared" | "myForms" | "drafts";
+
+type RouteMapType = {
+  [key: string]: FilterType;
+};
+
+const ROUTE_TO_FILTER_MAP: RouteMapType = {
+  [ROUTES.DASHBOARD_LOCAL]: "local",
+  [ROUTES.DASHBOARD_SHARED]: "shared",
+  [ROUTES.DASHBOARD_MY_FORMS]: "myForms",
+  [ROUTES.DASHBOARD_DRAFTS]: "drafts",
+  [ROUTES.DASHBOARD]: "local",
+};
+
 const defaultRelays = getDefaultRelays();
 
 export const Dashboard = () => {
   const { state } = useLocation();
+  const location = useLocation();
   const { pubkey } = useProfileContext();
   const [showFormDetails, setShowFormDetails] = useState<boolean>(!!state);
   const [localForms, setLocalForms] = useState<ILocalForm[]>(
     getItem(LOCAL_STORAGE_KEYS.LOCAL_FORMS) || []
   );
   const [nostrForms, setNostrForms] = useState<Map<string, Event>>(new Map());
-  const [filter, setFilter] = useState<
-    "local" | "shared" | "myForms" | "drafts"
-  >("local");
+  
+  const getCurrentFilterFromPath = (): FilterType => {
+    const path = location.pathname;
+    return ROUTE_TO_FILTER_MAP[path] || "local";
+  };
+  
+  const [filter, setFilter] = useState<FilterType>(getCurrentFilterFromPath());
 
-  const { poolRef, isTemplateModalOpen, closeTemplateModal } = useApplicationContext();
+  const { poolRef } = useApplicationContext();
 
   const subCloserRef = useRef<SubCloser | null>(null);
+
+
+  useEffect(() => {
+    const currentFilter = getCurrentFilterFromPath();
+    setFilter(currentFilter);
+  }, [location.pathname]);
 
   const handleEvent = (event: Event) => {
     setNostrForms((prevMap) => {
@@ -56,9 +80,10 @@ export const Dashboard = () => {
   };
 
   const fetchNostrForms = () => {
+    if (!pubkey) return;
     const queryFilter = {
       kinds: [30168],
-      "#p": [pubkey!],
+      "#p": [pubkey],
     };
 
     subCloserRef.current = poolRef.current.subscribeMany(
@@ -100,6 +125,8 @@ export const Dashboard = () => {
             templates={availableTemplates}
             onTemplateClick={handleTemplateClick}
             message="No forms found on this device. Start by choosing a template:"
+            action={() => navigate(ROUTES.CREATE_FORMS_NEW)}
+            actionLabel="Create New Form"
           />
         );
       }
@@ -116,10 +143,9 @@ export const Dashboard = () => {
         return <EmptyScreen message="No forms shared with you." />;
       }
       return Array.from(nostrForms.values()).map((formEvent: Event) => {
-        let d_tag = formEvent.tags.filter((t) => t[0] === "d")[0]?.[1];
-        let key = `${formEvent.kind}:${formEvent.pubkey}:${
-          d_tag ? d_tag : null
-        }`;
+        let d_tag = formEvent.tags.find((t) => t[0] === "d")?.[1];
+        if (!d_tag) return null; 
+        let key = `${formEvent.kind}:${formEvent.pubkey}:${d_tag}`;
         return <FormEventCard key={key} event={formEvent} />;
       });
     } else if (filter === "myForms") {
@@ -130,31 +156,42 @@ export const Dashboard = () => {
     return null;
   };
 
+  const handleFilterChange = (selectedFilter: FilterType) => {
+    const routeMap = {
+      local: ROUTES.DASHBOARD_LOCAL,
+      shared: ROUTES.DASHBOARD_SHARED,
+      myForms: ROUTES.DASHBOARD_MY_FORMS,
+      drafts: ROUTES.DASHBOARD_DRAFTS
+    };
+    
+    navigate(routeMap[selectedFilter]);
+  };
+
   const menu = (
-    <Menu
-    style={{ textAlign: "center"}}>
+    <Menu style={{ textAlign: "center" }}>
       <Menu.Item 
-        key="local" 
-        onClick={() => setFilter("local")}
+        key="local"
+        onClick={() => handleFilterChange("local")}
       >
         {MENU_OPTIONS.local}
       </Menu.Item>
       <Menu.Item
         key="shared"
-        onClick={() => setFilter("shared")}
+        onClick={() => handleFilterChange("shared")}
         disabled={!pubkey}
       >
         {MENU_OPTIONS.shared}
       </Menu.Item>
       <Menu.Item
         key="myForms"
-        onClick={() => setFilter("myForms")}
+        onClick={() => handleFilterChange("myForms")}
         disabled={!pubkey}
       >
         {MENU_OPTIONS.myForms}
       </Menu.Item>
-      <Menu.Item key="drafts" 
-      onClick={() => setFilter("drafts")}
+      <Menu.Item 
+        key="drafts"
+        onClick={() => handleFilterChange("drafts")}
       >
         {MENU_OPTIONS.drafts}
       </Menu.Item>
@@ -176,11 +213,6 @@ export const Dashboard = () => {
           </Dropdown>
         </div>
         <div className="form-cards-container">{renderForms()}</div>
-        <TemplateSelectorModal
-          visible={isTemplateModalOpen}
-          onClose={closeTemplateModal}
-          onTemplateSelect={handleTemplateClick}
-        />
         <>
           {state && (
             <FormDetails
