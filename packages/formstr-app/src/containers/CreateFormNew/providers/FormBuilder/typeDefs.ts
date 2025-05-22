@@ -63,13 +63,8 @@ export interface IFormBuilderContext {
   setEditList: (keys: Set<string>) => void;
   viewList: Set<string> | null;
   setViewList: (keys: Set<string>) => void;
-
   isRelayManagerModalOpen: boolean;
   toggleRelayManagerModal: () => void;
-  relayConnectionStatuses: Map<string, RelayStatus>;
-  updateRelayConnectionStatus: (relayId: string, status: RelayStatus) => void;
-  testRelayConnection: (relayId: string) => Promise<void>;
-  testAllRelayConnections: () => void;
   addRelayToList: (url: string) => void;
   editRelayInList: (tempId: string, newUrl: string) => void;
   deleteRelayFromList: (tempId: string) => void;

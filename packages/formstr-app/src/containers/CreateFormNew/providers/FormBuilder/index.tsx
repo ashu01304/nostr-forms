@@ -14,7 +14,6 @@ import { useProfileContext } from "../../../../hooks/useProfileContext";
 import { createForm } from "../../../../nostr/createForm";
 import { getItem, LOCAL_STORAGE_KEYS, setItem} from "../../../../utils/localStorage";
 import { Field } from "../../../../nostr/types";
-import { checkRelayConnection } from '../../../../utils/relayUtils';
 import { message } from 'antd';
 
 const LOCAL_STORAGE_CUSTOM_RELAYS_KEY = "formstr:customRelays";
@@ -52,10 +51,6 @@ export const FormBuilderContext = React.createContext<IFormBuilderContext>({
   setViewList: () => null,
   isRelayManagerModalOpen: false,
   toggleRelayManagerModal: () => null,
-  relayConnectionStatuses: new Map(),
-  updateRelayConnectionStatus: () => null,
-  testRelayConnection: async () => {},
-  testAllRelayConnections: () => {},
   addRelayToList: () => null,
   editRelayInList: () => null,
   deleteRelayFromList: () => null,
@@ -102,44 +97,7 @@ export default function FormBuilderProvider({
   const navigate = useNavigate();
 
   const [relayList, setRelayList] = useState<RelayItem[]>([]);
-  const [relayConnectionStatuses, setRelayConnectionStatuses] = useState<Map<string, RelayStatus>>(new Map());
   const [isRelayManagerModalOpen, setIsRelayManagerModalOpen] = useState(false);
-  const [isRelayListInitialized, setIsRelayListInitialized] = useState(false);
-
-  const relayListRef = useRef(relayList);
-  useEffect(() => {
-    relayListRef.current = relayList;
-  }, [relayList]);
-
-  const updateRelayConnectionStatus = useCallback((relayId: string, status: RelayStatus) => {
-    setRelayConnectionStatuses(prevStatuses => new Map(prevStatuses).set(relayId, status));
-  }, []);
-
-  const testRelayConnection = useCallback(async (relayId: string) => {
-    const currentRelayList = relayListRef.current;
-    const relayToTest = currentRelayList.find(r => r.tempId === relayId);
-    if (!relayToTest) return;
-
-    updateRelayConnectionStatus(relayId, 'pending');
-    try {
-      const status = await checkRelayConnection(relayToTest.url);
-      updateRelayConnectionStatus(relayId, status);
-    } catch (error) {
-      updateRelayConnectionStatus(relayId, 'error');
-    }
-  }, [updateRelayConnectionStatus]);
-
-  const testAllRelayConnectionsInstance = useCallback(() => {
-    const currentRelayList = relayListRef.current;
-    currentRelayList.forEach(relay => {
-      testRelayConnection(relay.tempId);
-    });
-  }, [testRelayConnection]);
-
-  const testAllRelayConnectionsInstanceRef = useRef(testAllRelayConnectionsInstance);
-  useEffect(() => {
-    testAllRelayConnectionsInstanceRef.current = testAllRelayConnectionsInstance;
-  }, [testAllRelayConnectionsInstance]);
   useEffect(() => {
     let baseList: RelayItem[];
     const storedUserManagedRelays = getItem<RelayItem[]>(LOCAL_STORAGE_CUSTOM_RELAYS_KEY);
@@ -149,7 +107,6 @@ export default function FormBuilderProvider({
         const existingStoredRelay = storedUserManagedRelays?.find(r => r.url === url);
         return existingStoredRelay || { url, tempId: makeTag(6) };
       });
-      setItem(LOCAL_STORAGE_CUSTOM_RELAYS_KEY, baseList);
     } else if (storedUserManagedRelays) {
       baseList = storedUserManagedRelays;
     } else {
@@ -181,79 +138,45 @@ export default function FormBuilderProvider({
     const uniqueFinalRelayList = Array.from(uniqueRelayMap.values());
 
     setRelayList(uniqueFinalRelayList);
-
-    const initialStatuses = new Map<string, RelayStatus>();
-    uniqueFinalRelayList.forEach(relay => initialStatuses.set(relay.tempId, 'unknown'));
-    setRelayConnectionStatuses(initialStatuses);
-    
-    setIsRelayListInitialized(true);
   }, [userRelays]);
-
-  useEffect(() => {
-    if (isRelayListInitialized && testAllRelayConnectionsInstanceRef.current) {
-      const timerId = setTimeout(() => {
-        testAllRelayConnectionsInstanceRef.current?.();
-      }, 100);
-      return () => clearTimeout(timerId);
-    }
-  }, [isRelayListInitialized]);
-
   const toggleRelayManagerModal = useCallback(() => {
-    setIsRelayManagerModalOpen(prev => {
-      const newState = !prev;
-      if (newState && isRelayListInitialized) {
-        testAllRelayConnectionsInstanceRef.current?.();
-      }
-      return newState;
-    });
-  }, [isRelayListInitialized]);
+    setIsRelayManagerModalOpen(prev => !prev);
+  }, []);
 
   const addRelayToList = useCallback((url: string) => {
-    const currentRelayList = relayListRef.current;
-    if (currentRelayList.some(relay => relay.url === url)) {
-        message.warning(`Relay URL ${url} already exists.`);
-        return;
-    }
-    const newRelay: RelayItem = { url, tempId: makeTag(6) };
-    const updatedList = [...currentRelayList, newRelay];
-    setRelayList(updatedList);
-    setItem(LOCAL_STORAGE_CUSTOM_RELAYS_KEY, updatedList);
-    updateRelayConnectionStatus(newRelay.tempId, 'pending');
-    testRelayConnection(newRelay.tempId);
-  }, [updateRelayConnectionStatus, testRelayConnection]);
+    setRelayList(prevRelayList => {
+        if (prevRelayList.some(relay => relay.url === url)) {
+            message.warning(`Relay URL ${url} already exists.`);
+            return prevRelayList;
+        }
+        const newRelay: RelayItem = { url, tempId: makeTag(6) };
+        const updatedList = [...prevRelayList, newRelay];
+        setItem(LOCAL_STORAGE_CUSTOM_RELAYS_KEY, updatedList.filter(r => !getDefaultRelays().includes(r.url))); // Only store custom relays
+        return updatedList;
+    });
+  }, []);
 
   const editRelayInList = useCallback((tempId: string, newUrl: string) => {
-    const currentRelayList = relayListRef.current;
-    if (currentRelayList.some(relay => relay.url === newUrl && relay.tempId !== tempId)) {
-        message.warning(`Relay URL ${newUrl} already exists.`);
-        return;
-    }
-    const updatedList = currentRelayList.map(relay =>
-        relay.tempId === tempId ? { ...relay, url: newUrl } : relay
-    );
-    setRelayList(updatedList);
-    setItem(LOCAL_STORAGE_CUSTOM_RELAYS_KEY, updatedList);
-    updateRelayConnectionStatus(tempId, 'pending');
-    testRelayConnection(tempId);
-  }, [updateRelayConnectionStatus, testRelayConnection]);
+    setRelayList(prevRelayList => {
+        if (prevRelayList.some(relay => relay.url === newUrl && relay.tempId !== tempId)) {
+            message.warning(`Relay URL ${newUrl} already exists.`);
+            return prevRelayList;
+        }
+        const updatedList = prevRelayList.map(relay =>
+            relay.tempId === tempId ? { ...relay, url: newUrl } : relay
+        );
+        setItem(LOCAL_STORAGE_CUSTOM_RELAYS_KEY, updatedList.filter(r => !getDefaultRelays().includes(r.url))); // Only store custom relays
+        return updatedList;
+    });
+  }, []);
 
   const deleteRelayFromList = useCallback((tempId: string) => {
-    const currentRelayList = relayListRef.current;
-    const relayToDelete = currentRelayList.find(r => r.tempId === tempId);
-    if (!relayToDelete) return;
-
-    const defaultRelayUrlsSet = new Set(getDefaultRelays());
-    const isDefaultRelay = defaultRelayUrlsSet.has(relayToDelete.url);
-
-    let updatedList = currentRelayList.filter(relay => relay.tempId !== tempId);
-    setItem(LOCAL_STORAGE_CUSTOM_RELAYS_KEY, updatedList); 
-
-    setRelayList(updatedList);
-
-    setRelayConnectionStatuses(prevStatuses => {
-      const newStatuses = new Map(prevStatuses);
-      newStatuses.delete(tempId);
-      return newStatuses;
+    setRelayList(prevRelayList => {
+        const relayToDelete = prevRelayList.find(r => r.tempId === tempId);
+        if (!relayToDelete) return prevRelayList;
+        let updatedList = prevRelayList.filter(relay => relay.tempId !== tempId);
+        setItem(LOCAL_STORAGE_CUSTOM_RELAYS_KEY, updatedList.filter(r => !getDefaultRelays().includes(r.url))); // Only store custom relays
+        return updatedList;
     });
   }, []);
 
@@ -284,7 +207,7 @@ export default function FormBuilderProvider({
       message.error("Form ID is required");
       return;
     }
-    const relayUrls = relayListRef.current.map((relay) => relay.url);
+    const relayUrls = relayList.map((relay) => relay.url);
     await createForm(
       formToSave,
       relayUrls,
@@ -441,10 +364,6 @@ export default function FormBuilderProvider({
         setViewList,
         isRelayManagerModalOpen,
         toggleRelayManagerModal,
-        relayConnectionStatuses,
-        updateRelayConnectionStatus,
-        testRelayConnection,
-        testAllRelayConnections: testAllRelayConnectionsInstanceRef.current || (() => {}),
         addRelayToList,
         editRelayInList,
         deleteRelayFromList,
