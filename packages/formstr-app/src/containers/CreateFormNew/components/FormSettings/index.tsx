@@ -3,7 +3,6 @@ import StyleWrapper from "./style";
 import useFormBuilderContext from "../../hooks/useFormBuilderContext";
 import TitleImage from "./TitleImage";
 import { Sharing } from "./Sharing";
-import { RelayList } from "./RelayList";
 import FormIdentifier from "./FormIdentifier";
 import { Notifications } from "./Notifications";
 import { isMobile } from "../../../../utils/utility";
@@ -111,7 +110,6 @@ function FormSettings() {
         >
           Manage Relays
         </Button>
-        <RelayList /> 
       </div>
 
       {isRelayManagerModalOpen && (
