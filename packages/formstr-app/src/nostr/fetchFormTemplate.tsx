@@ -15,7 +15,6 @@ export const fetchFormTemplate = async (
     authors: [formIdPubkey],
     "#d": [formIdentifier],
   };
-  console.log("attempting to fetch", pubKey, formIdentifier, "from", relayList);
   const subCloer = pool.subscribeMany(relayList, [filter], {
     onevent: (event: Event) => {
       onEvent(event);
