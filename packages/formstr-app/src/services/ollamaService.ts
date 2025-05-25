@@ -1,10 +1,11 @@
 import { Ollama } from 'ollama/browser';
-import type { ChatRequest, ChatResponse, ModelResponse } from 'ollama';
+import type { ChatRequest, ModelResponse, ChatResponse } from 'ollama'; // Added ChatResponse and 'from'
 import { getItem, setItem, LOCAL_STORAGE_KEYS } from '../utils/localStorage';
 
 export interface OllamaConfig {
     baseUrl: string;
     modelName: string;
+    apiKey?: string;
 }
 export interface OllamaModel {
     name: string;
@@ -20,12 +21,12 @@ export interface OllamaModel {
         quantization_level: string;
     };
 }
-export interface GenerateFormParams {
+export interface GenerateParams {
     prompt: string;
     systemPrompt?: string;
     tools?: any[]; 
 }
-export interface GenerateFormResult {
+export interface GenerateResult {
     success: boolean;
     data?: any; 
     error?: string;
@@ -52,6 +53,7 @@ class OllamaService {
         this.config = {
             baseUrl: storedUrl || DEFAULT_OLLAMA_URL,
             modelName: storedModel || DEFAULT_MODEL_NAME,
+            apiKey: "",
         };
         this.ollamaInstance = new Ollama({ host: this.config.baseUrl });
         console.log('OllamaService initialized with config:', this.config);
@@ -62,23 +64,31 @@ class OllamaService {
     }
 
     setConfig(newConfig: Partial<OllamaConfig>) {
+        const originalConfig = { ...this.config };
         const updatedConfig = { ...this.config, ...newConfig };
         let configChanged = false;
-        if (newConfig.baseUrl && newConfig.baseUrl !== this.config.baseUrl) {
-            this.config.baseUrl = newConfig.baseUrl;
-            setItem(LOCAL_STORAGE_KEYS.OLLAMA_URL, this.config.baseUrl, { parseAsJson: false }); 
-            this.ollamaInstance = new Ollama({ host: this.config.baseUrl });
+
+        if (newConfig.baseUrl && newConfig.baseUrl !== originalConfig.baseUrl) {
+            updatedConfig.baseUrl = newConfig.baseUrl;
+            setItem(LOCAL_STORAGE_KEYS.OLLAMA_URL, updatedConfig.baseUrl, { parseAsJson: false }); 
+            this.ollamaInstance = new Ollama({ host: updatedConfig.baseUrl });
             configChanged = true;
-            console.log('OllamaService baseUrl updated:', this.config.baseUrl);
+            console.log('OllamaService baseUrl updated:', updatedConfig.baseUrl);
         }
-        if (newConfig.modelName && newConfig.modelName !== this.config.modelName) {
-            this.config.modelName = newConfig.modelName;
-            setItem(LOCAL_STORAGE_KEYS.OLLAMA_MODEL, this.config.modelName, { parseAsJson: false });
+        if (newConfig.modelName && newConfig.modelName !== originalConfig.modelName) {
+            updatedConfig.modelName = newConfig.modelName;
+            setItem(LOCAL_STORAGE_KEYS.OLLAMA_MODEL, updatedConfig.modelName, { parseAsJson: false });
             configChanged = true;
-            console.log('OllamaService modelName updated:', this.config.modelName);
+            console.log('OllamaService modelName updated:', updatedConfig.modelName);
         }
+        if (newConfig.apiKey !== undefined && newConfig.apiKey !== originalConfig.apiKey) {
+            updatedConfig.apiKey = newConfig.apiKey;
+            configChanged = true;
+            console.log('OllamaService apiKey updated.');
+        }
+        this.config = updatedConfig;
         if(configChanged){
-             console.log('OllamaService config changed:', this.config);
+             console.log('OllamaService config effectively changed to:', this.config);
         }
     }
     async testConnection(): Promise<TestConnectionResult> {
@@ -127,8 +137,8 @@ class OllamaService {
             return { success: false, error: errorMessage };
         }
     }
-    async generateForm(params: GenerateFormParams): Promise<GenerateFormResult> {
-        console.log(`Generating form with model: ${this.config.modelName} @ ${this.config.baseUrl}`);
+    async generateContent(params: GenerateParams): Promise<GenerateResult> {
+        console.log(`Generating content with model: ${this.config.modelName} @ ${this.config.baseUrl}`);
         const chatRequest: ChatRequest = {
             model: this.config.modelName,
             messages: [
@@ -136,60 +146,66 @@ class OllamaService {
                 { role: 'user' as const, content: params.prompt }
             ],
             tools: params.tools,
-            stream: false as const
+            stream: false,
         };
         try {
-            const response = await this.ollamaInstance.chat({
-                ...chatRequest,
-                stream: false
-            } as ChatRequest & { stream: false });
+            const response = await this.ollamaInstance.chat(chatRequest as ChatRequest & { stream: false });
             console.log("Raw response from Ollama library:", response);
             const toolCalls = response.message?.tool_calls;
+            if (params.tools && params.tools.length > 0) {
             if (!toolCalls || toolCalls.length === 0) {
-                console.warn("Ollama response did not contain tool calls.", response.message?.content);
+                console.warn("Ollama response did not contain expected tool calls.", response.message?.content);
                 return {
                     success: false,
-                    error: "AI response received, but no function call was made. Try rephrasing your request.",
+                    error: "AI response received, but no function/tool call was made as expected. Try rephrasing your request or check the model's capabilities.",
                     rawResponse: response.message?.content
                 };
             }
-            const formToolCall = toolCalls[0];
-            if (formToolCall.function?.name !== 'create_form_structure') {
-                 console.warn("Expected tool 'create_form_structure' not found:", formToolCall.function?.name);
+            const firstToolCall = toolCalls[0];
+                const expectedToolName = params.tools[0].function.name;
+            if (firstToolCall.function?.name !== expectedToolName) {
+                 console.warn(`Expected tool '${expectedToolName}' not found. AI used: '${firstToolCall.function?.name}'`);
                  return {
                       success: false,
-                      error: `AI used an unexpected tool: '${formToolCall.function?.name}'. Expected 'create_form_structure'.`,
+                      error: `AI used an unexpected tool: '${firstToolCall.function?.name}'. Expected '${expectedToolName}'.`,
                       rawResponse: response.message?.content
                  };
             }
             try {
-                let parsedArgs = formToolCall.function.arguments;
+                let parsedArgs = firstToolCall.function.arguments;
                 if (typeof parsedArgs === 'string') {
                     try {
                          parsedArgs = JSON.parse(parsedArgs);
                     } catch (jsonParseError: any) {
-                         console.error("Failed to parse arguments string:", jsonParseError, "String was:", parsedArgs);
-                         return { success: false, error: `Failed to parse AI arguments: ${jsonParseError.message}` };
+                         console.error("Failed to parse tool arguments string:", jsonParseError, "String was:", parsedArgs);
+                         return { success: false, error: `Failed to parse AI tool arguments: ${jsonParseError.message}` };
+                        }
                     }
-                }
-                if (parsedArgs && typeof parsedArgs.fields === 'string') {
+                    if (expectedToolName === 'create_form_structure' && parsedArgs && typeof parsedArgs.fields === 'string') {
                     try {
                         parsedArgs.fields = JSON.parse(parsedArgs.fields);
                     } catch (fieldParseError: any) {
-                        console.error("Failed to parse 'fields' string within arguments:", fieldParseError, "Fields string was:", parsedArgs.fields);
-                        return { success: false, error: "AI provided 'fields' as a malformed JSON string." };
-                    }
+                        console.error("Failed to parse 'fields' string for create_form_structure:", fieldParseError, "Fields string was:", parsedArgs.fields);
+                            return { success: false, error: "AI provided 'fields' as a malformed JSON string for form creation." };
+                        }
+                    } 
+                    console.log("Successfully parsed tool arguments:", parsedArgs);
+                    return { success: true, data: parsedArgs };
+
+                } catch (parseError: any) {
+                    console.error("Error processing tool call arguments:", parseError, "Raw args:", firstToolCall.function.arguments);
+                    return { success: false, error: `Failed to process AI tool arguments: ${parseError.message}` };
                 }
-                 if (!parsedArgs || typeof parsedArgs !== 'object' || typeof parsedArgs.title !== 'string' || !Array.isArray(parsedArgs.fields)) {
-                    console.error("Parsed arguments missing required structure:", parsedArgs);
-                    return { success: false, error: "AI tool arguments missing required 'title' or 'fields' structure." };
-                }
-                console.log("Successfully parsed tool arguments:", parsedArgs);
-                return { success: true, data: parsedArgs };
-            } catch (parseError: any) {
-                console.error("Error processing tool call arguments:", parseError, "Raw args:", formToolCall.function.arguments);
-                return { success: false, error: `Failed to process AI tool arguments: ${parseError.message}` };
+
+            } else { // No tools were requested, so return the direct message content
+                console.log("No tools requested. Returning direct AI message content.");
+                return {
+                    success: true,
+                    data: response.message?.content, // Or just data: response.message for the whole message object
+                    rawResponse: response.message?.content
+                };
             }
+
         } catch (error: any) {
             console.error("Error during Ollama chat call:", error);
             let userMessage = "An unknown error occurred while communicating with the AI.";
@@ -202,6 +218,15 @@ class OllamaService {
             }
             return { success: false, error: userMessage };
         }
+    }
+
+    // Keep generateForm if it's widely used and specifically for form creation with its original logic
+    // For this new feature, it's better to use the more generic generateContent
+    async generateForm(params: GenerateParams): Promise<GenerateResult> {
+        // This method is now a wrapper for generateContent if the tool is 'create_form_structure'
+        // Or it can be deprecated in favor of calling generateContent directly with the correct tool params.
+        // For now, let's assume it calls generateContent:
+        return this.generateContent(params);
     }
 }
 export const ollamaService = new OllamaService();

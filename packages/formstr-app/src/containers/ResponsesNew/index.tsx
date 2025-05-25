@@ -16,6 +16,7 @@ import { useApplicationContext } from "../../hooks/useApplicationContext";
 import { ResponseDetailModal } from './components/ResponseDetailModal';
 import { getDefaultRelays } from "../../nostr/common";
 import { getResponseRelays, getInputsFromResponseEvent, getResponseLabels } from "../../utils/ResponseUtils";
+import { AiAnalysisChatbox } from "./components/AiAnalysisChatbox";
 
 const { Text } = Typography;
 
@@ -34,6 +35,7 @@ export const Response = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   let { poolRef } = useApplicationContext();
   const [isFormSpecLoading, setIsFormSpecLoading] = useState(true); 
+  const [isAiAnalysisVisible, setIsAiAnalysisVisible] = useState(false);
 
   const handleResponseEvent = (event: Event) => {
     setResponses((prev: Event[] | undefined) => {
@@ -89,25 +91,22 @@ export const Response = () => {
       }
       setResponses(undefined);
       setFormEvent(undefined);
+      setFormSpec(undefined);
       setIsFormSpecLoading(true);
       return;
     }
-    console.log("Hook 1: Initializing form template fetch");
     initialize();
     return () => {
-      console.log("Hook 1: Cleanup");
       if (responseCloser) {
-        console.log("Hook 1: Closing responseCloser in cleanup");
         responseCloser.close();
         setResponsesCloser(null);
       }
     };
-  }, [pubKey, formId, secretKey, userPubkey, viewKeyParams]);
+  }, [pubKey, formId, secretKey, userPubkey, viewKeyParams, poolRef]);
   useEffect(() => {
     if (!formEvent || !formId || !poolRef.current) { 
       return;
     }
-    console.log("Hook 2: formEvent available, fetching responses for", formEvent.id);
     let allowedPubkeys;
     let pubkeys = getAllowedUsers(formEvent);
     if (pubkeys.length !== 0) allowedPubkeys = pubkeys;
@@ -123,10 +122,10 @@ export const Response = () => {
     setResponsesCloser(newCloser);
 
     return () => {
-      console.log("Hook 2: Cleanup, closing subscription for formEvent", formEvent.id);
       newCloser.close();
     };
   }, [formEvent, formId, poolRef.current]);
+
 
   const getResponderCount = () => {
     if (!responses) return 0;
@@ -312,6 +311,9 @@ export const Response = () => {
               <Text>Could not load or decrypt form specification. Responses cannot be displayed.</Text>
             </div>;
   }
+  const toggleAiAnalysis = () => {
+    setIsAiAnalysisVisible(!isAiAnalysisVisible);
+  };
 
   return (
     <div>
@@ -330,7 +332,10 @@ export const Response = () => {
         </div>
       </SummaryStyle>
       <ResponseWrapper>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '10px', flexWrap: 'wrap' }}>
         <Export responsesData={getData(true) || []} formName={getFormName()} />
+          <Button type="primary" onClick={toggleAiAnalysis} style={{ marginTop: isMobile() ? '10px' : '0' }}>AI Analysis</Button>
+        </div>
         <div style={{ overflow: "scroll", marginBottom: 60 }}>
           <Table
             columns={getColumns()}
@@ -357,7 +362,7 @@ export const Response = () => {
           />
         </div>
       </ResponseWrapper>
-      {isModalOpen &&
+{isAiAnalysisVisible && <AiAnalysisChatbox formSpec={formSpec} responses={responses} editKey={editKey} />}      {isModalOpen &&
         formSpec && formSpec.length > 0 &&
         selectedResponseInputsForModal && (
         <ResponseDetailModal

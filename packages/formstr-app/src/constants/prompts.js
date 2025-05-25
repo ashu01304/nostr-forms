@@ -75,3 +75,89 @@ CRITICAL RULES:
 5.  **Required Fields:** Include 'required: true' only if explicitly requested or clearly implied for a field.
 
 Analyze the user prompt carefully and generate the complete, valid JSON structure adhering strictly to these rules and the tool's schema.`;
+
+export const IDENTIFY_RELEVANT_FIELDS_TOOL_SCHEMA = {
+  type: 'object',
+  properties: {
+    relevantFieldIds: {
+      type: 'array',
+      description: 'An array of field IDs (from the provided list) that are considered relevant for qualitative analysis.',
+      items: {
+        type: 'string',
+        description: 'A field ID.',
+      },
+    },
+    // --- REMOVED reasoning property ---
+  },
+  required: ['relevantFieldIds'], // --- REMOVED reasoning from required ---
+};
+
+export const IDENTIFY_RELEVANT_FIELDS_SYSTEM_PROMPT = `You are an expert in data analysis. Your task is to identify fields from a given form structure that are most suitable for qualitative analysis (e.g., sentiment analysis, feedback summarization, identifying suggestions/recommendations).
+Focus on fields that likely capture open-ended text.
+Use the 'identify_relevant_form_fields' tool to provide your answer.
+Respond ONLY with the array of relevant field IDs. If no fields are suitable, provide an empty array for 'relevantFieldIds'.`; // --- Updated prompt ---
+// ... (existing CREATE_FORM_TOOL_SCHEMA, CREATE_FORM_SYSTEM_PROMPT, IDENTIFY_RELEVANT_FIELDS_TOOL_SCHEMA, IDENTIFY_RELEVANT_FIELDS_SYSTEM_PROMPT)
+
+export const DEFINE_ANALYSIS_STRATEGY_TOOL_SCHEMA = {
+  type: 'object',
+  properties: {
+    suggestedAnalysisType: {
+      type: 'string',
+      description: 'A concise name for the type of analysis suggested (e.g., "Overall Sentiment Analysis", "Key Feedback Themes", "Suggestion Extraction").',
+    },
+    fieldsForAnalysis: {
+      type: 'array',
+      description: 'An array of field IDs (subset of the provided relevant fields) that are most critical for the suggested analysis type.',
+      items: {
+        type: 'string',
+        description: 'A field ID.',
+      },
+    },
+    analysisPromptToUse: {
+      type: 'string',
+      description: 'A well-crafted, specific prompt that can be given to an LLM (along with the actual data from fieldsForAnalysis) to perform the suggestedAnalysisType. This prompt should instruct the LLM on how to process the data and what kind of output to provide (e.g., "Summarize the key positive and negative points from the following feedback:").',
+    },
+    // Optional, but useful for guiding the next LLM call if we don't use another tool there.
+    expectedOutputFormatDescription: {
+        type: 'string',
+        description: "A brief description of the expected format of the LLM's response when using the 'analysisPromptToUse' (e.g., 'A JSON string with keys: summary, sentimentScore', or 'A short paragraph summarizing themes.'). This helps in anticipating how to parse the final analysis."
+    }
+  },
+  required: ['suggestedAnalysisType', 'fieldsForAnalysis', 'analysisPromptToUse', 'expectedOutputFormatDescription'],
+};
+
+export const DEFINE_ANALYSIS_STRATEGY_SYSTEM_PROMPT = `You are an expert AI assistant that helps plan data analysis tasks.
+Given a list of form fields deemed relevant for qualitative analysis, your goal is to:
+1. Suggest a single, primary type of automated analysis that would be insightful (e.g., "Overall Sentiment Analysis", "Key Feedback Themes", "Suggestion Extraction").
+2. Select the most critical field(s) from the provided list for this specific analysis.
+3. Craft a clear and concise prompt that can be used to instruct another LLM to perform this analysis on the actual data from the selected critical field(s). This prompt should guide the other LLM on what to look for and what kind of output to generate.
+4. Describe the expected format of the output from the analysis prompt you just created.
+Use the 'define_analysis_strategy' tool to provide your response.`;
+
+// ... (all existing schemas and prompts)
+
+export const GENERAL_ANALYSIS_OUTPUT_TOOL_SCHEMA = {
+  type: 'object',
+  properties: {
+    analysisTitle: {
+      type: 'string',
+      description: 'A concise title for the analysis performed (e.g., "Sentiment Summary of Comments", "Key Themes from Feedback").',
+    },
+    analysisResult: {
+      type: 'string', 
+      description: 'The main content of the analysis. This could be a summary, a list of points, or a stringified JSON object if the analysis is complex and the guiding prompt asked for it.',
+    },
+    issuesOrNotes: { 
+        type: 'string',
+        description: "Optional: Any messages, errors, or notes from the AI about the analysis process, or if it couldn't perform the requested analysis on the data, or if the data was insufficient."
+    }
+  },
+  required: ['analysisTitle', 'analysisResult'], // issuesOrNotes is optional
+};
+
+export const EXECUTE_ANALYSIS_SYSTEM_PROMPT = `You are an AI assistant performing data analysis based on a given prompt and data.
+Your task is to execute the analysis and structure your findings using the 'perform_data_analysis' tool.
+The 'analysisPromptToUse' (which will be part of the user message) contains the specific instructions for *what* to analyze and *what kind of insights* to generate.
+If the 'analysisPromptToUse' asks for a specific JSON structure within its output, ensure the string you provide for the 'analysisResult' field of the tool is valid, well-formed JSON.
+If you encounter issues with the data (e.g., it's empty, irrelevant for the requested analysis) or cannot fully perform the requested analysis, detail this in the 'issuesOrNotes' field of the tool.
+Focus on fulfilling the 'analysisPromptToUse' and then fitting your answer into the 'perform_data_analysis' tool structure.`;
