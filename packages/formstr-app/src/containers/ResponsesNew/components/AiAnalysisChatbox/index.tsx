@@ -1,3 +1,4 @@
+// packages/formstr-app/src/containers/ResponsesNew/components/AiAnalysisChatbox/index.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Typography, Input, Button, Spin, Alert, Card as AntCard } from 'antd';
 import {
@@ -15,9 +16,12 @@ import {
     determineInitialAnalysisStrategyService,
     prepareDataForAnalysisService,
     executeAutomatedAnalysisService,
-    type RelevantFieldInfo, 
+    // We'll add the new service function for user queries here later
+    processUserQuery, 
+    type RelevantFieldInfo,
     type AnalysisStrategy,
-    type StructuredAnalysisOutput
+    type StructuredAnalysisOutput,
+    type FormDetailsForLLM, // Ensure this is exported from aiAnalysisService
 } from '../../../../services/aiAnalysisService';
 
 const { Title, Text, Paragraph } = Typography;
@@ -38,14 +42,16 @@ interface AiAnalysisChatboxProps {
 export const AiAnalysisChatbox: React.FC<AiAnalysisChatboxProps> = ({ formSpec, responses, editKey }) => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [userInput, setUserInput] = useState<string>('');
-  // const [isAiResponding, setIsAiResponding] = useState<boolean>(false); // For user queries (currently disabled)
+  const [isAiRespondingToUserQuery, setIsAiRespondingToUserQuery] = useState<boolean>(false); // New state
 
   const [loadingInitialAnalysis, setLoadingInitialAnalysis] = useState(false);
   const [currentStepMessage, setCurrentStepMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
-  const messageIdCounter = useRef(0); // For unique message keys
+  const messageIdCounter = useRef(0); 
+  const initialAnalysisDone = useRef(false); 
+  const currentRelevantFieldsRef = useRef<RelevantFieldInfo[]>([]); // To store relevant fields for user queries
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -58,71 +64,68 @@ export const AiAnalysisChatbox: React.FC<AiAnalysisChatboxProps> = ({ formSpec, 
     const newId = `msg-${Date.now()}-${messageIdCounter.current}`;
     setChatMessages(prev => [...prev, {id: newId, sender, content, timestamp: new Date()}]);
   };
-    const initialAnalysisDone = useRef(false); // +++ Ref to track if initial analysis has run
-
   
    useEffect(() => {
     const performFullAutomatedAnalysis = async () => {
-        // This check ensures it runs only once after all conditions are met
         if (initialAnalysisDone.current) return; 
-
         if (!formSpec || formSpec.length === 0) {
-            // ... (same initial check logic)
             return;
         }
         if (!responses) {
-            // ... (same initial check logic)
             return;
         }
         
-        initialAnalysisDone.current = true; // +++ Mark as done right before starting the actual work
+        initialAnalysisDone.current = true; 
 
         setLoadingInitialAnalysis(true);
         setError(null);
         setChatMessages([{id: `sys-start-${Date.now()}`, sender: 'systemInfo', content: '🚀 AI analysis pipeline initiated...', timestamp: new Date()}]);
 
         try {
-            setCurrentStepMessage("Identifying relevant fields...");
+            setCurrentStepMessage("Extracting form structure...");
             const formDetails = extractFormDetails(formSpec);
             if (formDetails.fields.length === 0) {
                 addMessage('systemInfo', `No actionable fields found in the form to analyze.`);
-                return; // No finally block needed here, as setLoading is at the end of try/catch
+                setLoadingInitialAnalysis(false);
+                return;
             }
+
+            setCurrentStepMessage("Identifying relevant fields...");
             const relevanceUserPrompt = generateRelevanceUserPrompt(formDetails);
-            // --- Adjusted to expect no reasoning ---
-            const { fieldIds: relevantIds /*, reasoning: relevanceReasoning REMOVED */ } = await getRelevantFieldsFromLLMService(relevanceUserPrompt, formDetails.fields);
+            const { fieldIds: relevantIds } = await getRelevantFieldsFromLLMService(relevanceUserPrompt, formDetails.fields);
             
-            // --- REMOVED UI display of relevanceReasoning ---
-            // console.log("AI Relevance Reasoning:", relevanceReasoning); (Still good for dev console)
             console.log("AI Relevant Field IDs:", relevantIds);
 
             if (relevantIds.length === 0) {
                 addMessage('systemInfo', "AI did not identify any specific fields as particularly relevant for an automated overview.");
-                return;
+                currentRelevantFieldsRef.current = formDetails.fields; // Default to all fields if none specifically relevant
+                addMessage('systemInfo', "Automated analysis will proceed considering all form fields for potential insights.");
+            } else {
+                 currentRelevantFieldsRef.current = relevantIds.map(id => {
+                    const field = formDetails.fields.find(f => f.id === id);
+                    return { id, label: field ? field.label : id };
+                });
             }
-            const currentRelevantFieldsInfo: RelevantFieldInfo[] = relevantIds.map(id => {
-                const field = formDetails.fields.find(f => f.id === id);
-                return { id, label: field ? field.label : id };
-            });
+setCurrentStepMessage("Defining an analysis strategy...");
+const strategy: AnalysisStrategy = await determineInitialAnalysisStrategyService(
+    currentRelevantFieldsRef.current, 
+    formDetails, // <<< NEW: passing the whole formDetails object
+    // userQuestion is undefined here for automated analysis, which is correct
+);
+console.log("AI Determined Strategy:", strategy);
 
-            // --- No longer adding detailed relevance card to chat ---
-            // addMessage('systemInfo', <AntCard size="small" title="Field Relevance Analysis"> ... </AntCard>);
 
-            setCurrentStepMessage("Defining an analysis strategy...");
-            const strategy: AnalysisStrategy = await determineInitialAnalysisStrategyService(currentRelevantFieldsInfo, formDetails.formName, formDetails.formDescription);
-            console.log("AI Determined Strategy:", strategy);
-            // --- No longer adding detailed strategy card to chat ---
-            // addMessage('systemInfo', <AntCard size="small" title="AI's Analysis Plan"> ... </AntCard>);
-
-            if (responses.length === 0) {
+            if (!responses || responses.length === 0) { // Check responses again, might have changed
                 addMessage('systemInfo', "No response data available to analyze for the automated strategy.");
+                setLoadingInitialAnalysis(false);
                 return;
             }
             setCurrentStepMessage(`Preparing data for '${strategy.suggestedAnalysisType}'...`);
             const preparedData = prepareDataForAnalysisService(strategy.fieldsForAnalysis, responses, formSpec, editKey);
             
             if (!preparedData.trim()) {
-                addMessage('systemInfo', `No data found in the field(s) chosen for analysis: ${strategy.fieldsForAnalysis.map(id => currentRelevantFieldsInfo.find(f=>f.id===id)?.label || id).join(', ')}.`);
+                addMessage('systemInfo', `No data found in the field(s) chosen for analysis: ${strategy.fieldsForAnalysis.map(id => currentRelevantFieldsRef.current.find(f=>f.id===id)?.label || id).join(', ')}.`);
+                 setLoadingInitialAnalysis(false);
                 return;
             }
 
@@ -135,21 +138,21 @@ export const AiAnalysisChatbox: React.FC<AiAnalysisChatboxProps> = ({ formSpec, 
                     {analysisOutput.issuesOrNotes && <Paragraph style={{marginTop: '10px', fontSize: '0.9em', color: '#888', borderTop: '1px dashed #eee', paddingTop: '5px'}}><Text strong>AI Notes:</Text> {analysisOutput.issuesOrNotes}</Paragraph>}
                 </AntCard>
             );
-            addMessage('systemInfo', "✅ Automated analysis complete. User interaction for follow-up questions is currently disabled.");
+            addMessage('systemInfo', "✅ Automated analysis complete. You can now ask follow-up questions below.");
 
         } catch (err: any) {
             const errorMessage = err.message || "An error occurred during AI analysis.";
             setError(errorMessage);
             addMessage('systemInfo', <Alert message={`Pipeline Error: ${errorMessage}`} type="error" showIcon />);
         } finally {
-            setLoadingInitialAnalysis(false); // Ensure loading is set to false in all paths
+            setLoadingInitialAnalysis(false); 
             setCurrentStepMessage(null);
         }
     };
 
-    if (formSpec && responses && !initialAnalysisDone.current) { // +++ Check initialAnalysisDone.current
+    if (formSpec && responses && !initialAnalysisDone.current) { 
         performFullAutomatedAnalysis();
-    } else if (formSpec && !responses && !initialAnalysisDone.current) { // Only show waiting if not already done
+    } else if (formSpec && !responses && !initialAnalysisDone.current) { 
         if (chatMessages.length === 0 || !chatMessages.some(msg => typeof msg.content === 'string' && msg.content.includes("Waiting for responses"))) {
              setChatMessages([{id: `sys-wait-${Date.now()}`, sender: 'systemInfo', content: "Form loaded. Waiting for responses to perform analysis...", timestamp: new Date()}]);
         }
@@ -158,10 +161,8 @@ export const AiAnalysisChatbox: React.FC<AiAnalysisChatboxProps> = ({ formSpec, 
     }
     
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formSpec, responses, editKey]); // Dependencies remain the same.
-                                      // The initialAnalysisDone ref controls one-time execution logic internally.
+  }, [formSpec, responses, editKey]); 
     
-  // ... (renderAnalysisResult, handleUserInputSubmit, and return JSX remain the same)
   const renderAnalysisResult = (resultData: string | object | null) => {
     if (resultData === null || resultData === undefined) return <Text type="secondary">No specific result content provided by AI.</Text>;
     
@@ -177,18 +178,58 @@ export const AiAnalysisChatbox: React.FC<AiAnalysisChatboxProps> = ({ formSpec, 
   };
 
   const handleUserInputSubmit = async () => {
-    addMessage('systemInfo', 'Follow-up questions are not yet implemented in this phase.');
+    if (!userInput.trim()) return;
+    // Ensure formSpec and responses are available
+    if (!formSpec || formSpec.length === 0 || !responses) { 
+        addMessage('systemInfo', "Cannot process question: Form data or responses are not fully loaded.");
+        return;
+    }
+
+    const userQuestion = userInput;
+    addMessage('user', userQuestion);
+    setUserInput('');
+    setIsAiRespondingToUserQuery(true);
+    setError(null);
+
+    try {
+        // Extract form details (needed by processUserQuery)
+        const formDetails: FormDetailsForLLM = extractFormDetails(formSpec); 
+        
+        // Call the actual service function
+        const aiResponse: StructuredAnalysisOutput = await processUserQuery(
+            userQuestion,
+            formDetails,
+            formSpec, // Pass the original full Tag[] formSpec
+            responses,
+            // currentRelevantFieldsRef.current, // <<< REMOVE THIS ARGUMENT
+            editKey
+        );
+
+        addMessage('ai', 
+            <AntCard type="inner" size="small" title={aiResponse.analysisTitle || "AI Response"}>
+                {renderAnalysisResult(aiResponse.analysisResult)}
+                {aiResponse.issuesOrNotes && <Paragraph style={{marginTop: '10px', fontSize: '0.9em', color: '#888', borderTop: '1px dashed #eee', paddingTop: '5px'}}><Text strong>AI Notes:</Text> {aiResponse.issuesOrNotes}</Paragraph>}
+            </AntCard>
+        );
+
+    } catch (err: any) {
+        const errorMessage = err.message || "An error occurred while processing your question.";
+        setError(errorMessage);
+        addMessage('systemInfo', <Alert message={`Query Error: ${errorMessage}`} type="error" showIcon />);
+    } finally {
+        setIsAiRespondingToUserQuery(false);
+    }
   };
 
   return (
     <ChatboxContainer>
       <Title level={4} style={{ marginBottom: '10px', textAlign: 'center' }}>AI Analysis</Title>
-      {loadingInitialAnalysis && 
+      {(loadingInitialAnalysis || isAiRespondingToUserQuery) && 
         <div style={{textAlign: 'center', marginBottom: '10px'}}>
-            <Spin tip={currentStepMessage || "AI is processing..."} />
+            <Spin tip={currentStepMessage || (isAiRespondingToUserQuery ? "AI is thinking..." : "AI is processing...")} />
         </div>
       }
-      {error && !loadingInitialAnalysis && <Alert message={`Error: ${error}`} type="error" showIcon style={{marginBottom: '10px'}} />}
+      {error && !loadingInitialAnalysis && !isAiRespondingToUserQuery && <Alert message={`Error: ${error}`} type="error" showIcon style={{marginBottom: '10px'}} />}
       
       <MessagesArea>
         {chatMessages.map(msg => (
@@ -207,15 +248,22 @@ export const AiAnalysisChatbox: React.FC<AiAnalysisChatboxProps> = ({ formSpec, 
       <InputArea>
         <Input.TextArea
           rows={2}
-          placeholder="Follow-up questions (feature coming soon)..."
+          placeholder="Ask a follow-up question about the responses..."
           value={userInput}
           onChange={(e) => setUserInput(e.target.value)}
-          disabled={true} 
+          disabled={loadingInitialAnalysis || isAiRespondingToUserQuery || !initialAnalysisDone.current} 
+          onPressEnter={(e) => {
+            if (!e.shiftKey) {
+              e.preventDefault();
+              handleUserInputSubmit();
+            }
+          }}
         />
         <Button 
             type="primary" 
             onClick={handleUserInputSubmit}
-            disabled={true} 
+            loading={isAiRespondingToUserQuery}
+            disabled={loadingInitialAnalysis || isAiRespondingToUserQuery || !initialAnalysisDone.current}
         >
           Ask
         </Button>

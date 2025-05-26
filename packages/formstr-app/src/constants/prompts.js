@@ -56,23 +56,23 @@ export const CREATE_FORM_TOOL_SCHEMA = {
 };
 
 const allowedTypesString = CREATE_FORM_TOOL_SCHEMA.properties.fields.items.properties.type.enum.join("', '");
-export const CREATE_FORM_SYSTEM_PROMPT = `You are an expert JSON generator using the 'create_form_structure' tool to create web forms. Respond ONLY with the JSON output required by the tool call.
+export const CREATE_FORM_SYSTEM_PROMPT = `JSON generator for web forms using 'create_form_structure' tool. Output ONLY the JSON.
 
 CRITICAL RULES:
-1.  **Structure:** Output MUST include 'title' (string) and 'fields' (array of field objects). 'description' (string) is optional. The 'fields' array MUST be flat.
-2.  **Field 'type':** EVERY field object MUST have a 'type' property. Its value MUST be EXACTLY one of: '${allowedTypesString}'.
-3.  **Type Selection:** Choose the MOST SPECIFIC type from the allowed list based on the field's purpose.
-    -   'Email': Use for email addresses.
-    -   'Date'/'Time': Use for dates/times.
-    -   'Number': Use for numerical input.
-    -   'LongText': Use for paragraphs or multi-line input.
-    -   'ShortText': Use for other single-line text.
-4.  **Choice Fields ('MultipleChoice', 'SingleChoice', 'Checkbox', 'Dropdown'):**
-    -   These types REQUIRE an 'options' property: an array of at least two strings.
-    -   Use 'Checkbox' ONLY if MULTIPLE selections are allowed.
-    -   Use 'SingleChoice' or 'MultipleChoice' if ONLY ONE selection is allowed (radio button style).
-    -   Use 'Dropdown' if ONLY ONE selection is allowed (dropdown list style).
-5.  **Required Fields:** Include 'required: true' only if explicitly requested or clearly implied for a field.
+1. Structure: Output MUST include 'title' (string) and 'fields' (array of field objects). 'description' (string) is optional. The 'fields' array MUST be flat.
+2. Field 'type': EVERY field object MUST have a 'type' property. Its value MUST be EXACTLY one of: '${allowedTypesString}'.
+3. Type Selection: Choose the MOST SPECIFIC type from the allowed list based on the field's purpose.
+   - 'Email': Use for email addresses.
+   - 'Date'/'Time': Use for dates/times.
+   - 'Number': Use for numerical input.
+   - 'LongText': Use for paragraphs or multi-line input.
+   - 'ShortText': Use for other single-line text.
+4. Choice Fields ('MultipleChoice', 'SingleChoice', 'Checkbox', 'Dropdown'):
+   - These types REQUIRE an 'options' property: an array of at least two strings.
+   - Use 'Checkbox' ONLY if MULTIPLE selections are allowed.
+   - Use 'SingleChoice' or 'MultipleChoice' if ONLY ONE selection is allowed (radio button style).
+   - Use 'Dropdown' if ONLY ONE selection is allowed (dropdown list style).
+5. Required Fields: Include 'required: true' only if explicitly requested or clearly implied for a field.
 
 Analyze the user prompt carefully and generate the complete, valid JSON structure adhering strictly to these rules and the tool's schema.`;
 
@@ -87,7 +87,6 @@ export const IDENTIFY_RELEVANT_FIELDS_TOOL_SCHEMA = {
         description: 'A field ID.',
       },
     },
-    // --- REMOVED reasoning property ---
   },
   required: ['relevantFieldIds'], // --- REMOVED reasoning from required ---
 };
@@ -96,7 +95,6 @@ export const IDENTIFY_RELEVANT_FIELDS_SYSTEM_PROMPT = `You are an expert in data
 Focus on fields that likely capture open-ended text.
 Use the 'identify_relevant_form_fields' tool to provide your answer.
 Respond ONLY with the array of relevant field IDs. If no fields are suitable, provide an empty array for 'relevantFieldIds'.`; // --- Updated prompt ---
-// ... (existing CREATE_FORM_TOOL_SCHEMA, CREATE_FORM_SYSTEM_PROMPT, IDENTIFY_RELEVANT_FIELDS_TOOL_SCHEMA, IDENTIFY_RELEVANT_FIELDS_SYSTEM_PROMPT)
 
 export const DEFINE_ANALYSIS_STRATEGY_TOOL_SCHEMA = {
   type: 'object',
@@ -158,6 +156,33 @@ export const GENERAL_ANALYSIS_OUTPUT_TOOL_SCHEMA = {
 export const EXECUTE_ANALYSIS_SYSTEM_PROMPT = `You are an AI assistant performing data analysis based on a given prompt and data.
 Your task is to execute the analysis and structure your findings using the 'perform_data_analysis' tool.
 The 'analysisPromptToUse' (which will be part of the user message) contains the specific instructions for *what* to analyze and *what kind of insights* to generate.
+**Focus ONLY on the data provided with the prompt. Do not infer information from field names or general knowledge if the data itself does not support it for the specific question asked.**
 If the 'analysisPromptToUse' asks for a specific JSON structure within its output, ensure the string you provide for the 'analysisResult' field of the tool is valid, well-formed JSON.
 If you encounter issues with the data (e.g., it's empty, irrelevant for the requested analysis) or cannot fully perform the requested analysis, detail this in the 'issuesOrNotes' field of the tool.
 Focus on fulfilling the 'analysisPromptToUse' and then fitting your answer into the 'perform_data_analysis' tool structure.`;
+export const SELECT_FIELDS_FOR_USER_QUERY_TOOL_SCHEMA = {
+  type: 'object',
+  properties: {
+    selectedFieldIds: {
+      type: 'array',
+      description: 'An array of field IDs (from the provided list of available form fields) that are most relevant to answering the current user question. Return an empty array if no specific fields are clearly relevant or if the question is too general.',
+      items: {
+        type: 'string',
+        description: 'A field ID.',
+      },
+    },
+    reasoningForSelection: { // Optional, but can be useful
+        type: 'string',
+        description: 'A brief explanation of why these field(s) were chosen to answer the user question, or why no specific fields were chosen.'
+    }
+  },
+  required: ['selectedFieldIds', 'reasoningForSelection'], // Making reasoning required for better feedback
+};
+
+export const SELECT_FIELDS_FOR_USER_QUERY_SYSTEM_PROMPT = `You are an expert data analyst assistant.
+Your primary task is to identify which of the available form fields are most relevant for finding the answer to the user's specific question.
+The user's question and a list of available form fields (with their IDs and labels) will be provided.
+Consider the semantics of the user's question and the nature of each form field.
+Use the 'select_fields_for_user_query' tool to output the IDs of the most relevant field(s).
+If no single field or small set of fields seems directly relevant (e.g., the question is very general or about overall response patterns), you can return an empty array for 'selectedFieldIds'.
+You MUST provide a 'reasoningForSelection', explaining your choice of fields or why you chose none.`;
