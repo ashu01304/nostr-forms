@@ -1,76 +1,86 @@
 // packages/formstr-app/src/services/aiAnalysisService.ts
 
-import { Tag, Field } from '../nostr/types';
-import { Event, nip19 } from 'nostr-tools'; // Added nip19
+import { Tag, Field, Option } from '../nostr/types'; // Added Option type
+import { Event, nip19 } from 'nostr-tools';
 import { ollamaService, GenerateParams } from './ollamaService';
 import {
     IDENTIFY_RELEVANT_FIELDS_TOOL_SCHEMA,
     IDENTIFY_RELEVANT_FIELDS_SYSTEM_PROMPT,
-    DEFINE_ANALYSIS_STRATEGY_TOOL_SCHEMA,
-    DEFINE_ANALYSIS_STRATEGY_SYSTEM_PROMPT,
-    GENERAL_ANALYSIS_OUTPUT_TOOL_SCHEMA,
-    EXECUTE_ANALYSIS_SYSTEM_PROMPT, // Ensure this is the updated version
-    SELECT_FIELDS_FOR_USER_QUERY_TOOL_SCHEMA,
-    SELECT_FIELDS_FOR_USER_QUERY_SYSTEM_PROMPT,
+    EXECUTE_DIRECT_ANALYSIS_SYSTEM_PROMPT,
+    SELECT_FIELDS_AND_FORMULATE_DIRECT_QUERY_TOOL_SCHEMA,
+    SELECT_FIELDS_AND_FORMULATE_DIRECT_QUERY_SYSTEM_PROMPT,
 } from '../constants/prompts';
 import { getInputsFromResponseEvent, getResponseLabels } from '../utils/ResponseUtils';
-// import { AnswerTypes } from '@formstr/sdk/dist/interfaces'; // Not directly used here, but useful for context
 
+// Modified to include optional 'options' for choice fields
+export interface FormDetailsForLLMField {
+    id: string;
+    label: string;
+    type: string; // This is the renderElement type
+    options?: string[]; // Added for choice types
+}
 export interface FormDetailsForLLM {
   formName: string;
   formDescription?: string;
-  fields: { id: string; label: string; type: string }[]; // Type is important
+  fields: FormDetailsForLLMField[];
 }
 
 export interface RelevantFieldInfo {
     id: string;
     label: string;
-    // type could be added if needed for other parts of the UI, but FormDetailsForLLM.fields has it
 }
 
-export interface AnalysisStrategy {
-    suggestedAnalysisType: string;
-    fieldsForAnalysis: string[]; // IDs of fields or metadata keys
-    analysisPromptToUse: string;
-    expectedOutputFormatDescription: string;
-}
-
-export interface StructuredAnalysisOutput {
-    analysisTitle: string;
-    analysisResult: string | object;
+export interface ProcessedUserQueryOutput {
+    aiResponseText: string;
     issuesOrNotes?: string;
 }
 
-// --- UPDATED extractFormDetails to include field type ---
+// --- extractFormDetails - Modified to include options for choice fields ---
 export const extractFormDetails = (currentFormSpec: Tag[]): FormDetailsForLLM => {
     const formName = currentFormSpec.find((tag) => tag[0] === 'name')?.[1] || 'Untitled Form';
     const settingsTag = currentFormSpec.find(tag => tag[0] === 'settings');
-    const settingsString = settingsTag ? settingsTag[1] : '{}';
     let formDescription = '';
-    try {
-      const settings = JSON.parse(settingsString);
-      formDescription = settings?.description || '';
-    } catch (parseError) {
-      // console.warn("Error parsing form settings for description:", parseError);
+    if (settingsTag && settingsTag[1]) {
+        try {
+            const settings = JSON.parse(settingsTag[1]);
+            formDescription = settings?.description || '';
+        } catch (parseError) { /* Silently ignore */ }
     }
 
-    const fields = currentFormSpec
+    const fields: FormDetailsForLLMField[] = currentFormSpec
         .filter((tag): tag is Field => tag[0] === 'field' && tag.length >= 6)
         .map(fieldTag => {
-            // fieldTag is [tagName, id, primitiveType, label, optionsJson, configJson]
-            let determinedType = fieldTag[2] || 'unknown'; // Start with primitive type (e.g., "text", "number", "option")
-            try {
-                const config = JSON.parse(fieldTag[5] || '{}'); // configJson is at index 5
-                if (config.renderElement && typeof config.renderElement === 'string') {
-                    determinedType = config.renderElement; // More specific: "shortText", "date", "radioButton"
-                }
-            } catch (e) {
-                // console.warn(`Error parsing config for field ID ${fieldTag[1]}: ${e}`);
+            const fieldId = fieldTag[1];
+            const fieldLabel = fieldTag[3] || `(Untitled Field ID: ${fieldId})`;
+            let determinedType = fieldTag[2] || 'unknown'; // Primitive type: "text", "number", "option"
+            let fieldOptions: string[] | undefined = undefined;
+
+            if (fieldTag[5]) { // configJson is at index 5
+                try {
+                    const config = JSON.parse(fieldTag[5]);
+                    if (config.renderElement && typeof config.renderElement === 'string') {
+                        determinedType = config.renderElement; // More specific: "shortText", "date", "radioButton"
+                    }
+                } catch (e) { /* Silently ignore */ }
             }
+
+            // If it's an option/choice type, extract the option labels
+            if (determinedType === 'radioButton' || determinedType === 'checkboxes' || determinedType === 'dropdown') {
+                if (fieldTag[4]) { // optionsString is at index 4
+                    try {
+                        const optionsArray = JSON.parse(fieldTag[4]) as Option[]; // Assuming Option is [id, label, settingsString?]
+                        if (Array.isArray(optionsArray)) {
+                            fieldOptions = optionsArray.map(opt => opt[1]); // Get the label part of the option
+                        }
+                    } catch (e) { /* Silently ignore */ }
+                }
+            }
+
             return {
-                id: fieldTag[1], 
-                label: fieldTag[3] || `(Untitled Field ID: ${fieldTag[1]})`, 
-                type: determinedType
+                id: fieldId,
+                label: fieldLabel,
+                type: determinedType,
+                options: fieldOptions, // Add options here
             };
         })
         .filter(field => field.label.trim() !== '' && !field.label.startsWith('(Untitled Field ID:'));
@@ -78,36 +88,28 @@ export const extractFormDetails = (currentFormSpec: Tag[]): FormDetailsForLLM =>
     return { formName, formDescription, fields };
 };
 
-// --- UPDATED generateRelevanceUserPrompt (for initial auto-analysis) to show field types ---
 export const generateRelevanceUserPrompt = (formDetails: FormDetailsForLLM): string => {
     const { formName, formDescription, fields } = formDetails;
-    if (fields.length === 0) {
-        return "The form has no user-defined fields to analyze for relevance.";
-    }
-    const fieldsList = fields.map(f => `- Label: "${f.label}", ID: ${f.id}, Type: ${f.type}`).join('\n');
-    return `Form Name: "${formName}"
-Form Description: "${formDescription || 'N/A'}"
-
-Task: Identify user-defined form fields suitable for general qualitative analysis (e.g., sentiment, feedback summarization).
-Consider field "Type" (e.g., "LongText", "ShortText" are good candidates).
-Provide a list of relevant field IDs using the 'identify_relevant_form_fields' tool.
-
-User-Defined Form Fields:
-${fieldsList}`;
+    if (fields.length === 0) return "The form has no user-defined fields to analyze for relevance.";
+    const fieldsList = fields.map(f => {
+        let fieldDesc = `- Label: "${f.label}", ID: ${f.id}, Type: ${f.type}`;
+        if (f.options && f.options.length > 0) {
+            fieldDesc += `, Options: [${f.options.join(', ')}]`;
+        }
+        return fieldDesc;
+    }).join('\n');
+    return `Form Name: "${formName}"\nForm Description: "${formDescription || 'N/A'}"\n\nTask: Identify user-defined form fields suitable for general qualitative analysis (e.g., sentiment, feedback summarization). Consider field "Type" and available "Options". Provide IDs using 'identify_relevant_form_fields' tool.\n\nUser-Defined Form Fields:\n${fieldsList}`;
 };
 
-// --- getRelevantFieldsFromLLMService (for initial auto-analysis) - No structural change, uses updated prompt from above ---
-export const getRelevantFieldsFromLLMService = async ( 
-    userPrompt: string,
-    allFieldDetails: FormDetailsForLLM['fields']
-  ): Promise<{ fieldIds: string[]; }> => {
+export const getRelevantFieldsFromLLMService = async (userPrompt: string, allFieldDetails: FormDetailsForLLM['fields']): Promise<{ fieldIds: string[]; }> => {
     const params: GenerateParams = {
         prompt: userPrompt,
         systemPrompt: IDENTIFY_RELEVANT_FIELDS_SYSTEM_PROMPT,
         tools: [{type: 'function'as const,function: {name: 'identify_relevant_form_fields',description: 'Identifies relevant fields for analysis.',parameters: IDENTIFY_RELEVANT_FIELDS_TOOL_SCHEMA,},}]
     };
+    // ... (rest of the function remains the same as it was already correct)
     const ollamaResponse = await ollamaService.generateContent(params);
-    if (ollamaResponse.success && ollamaResponse.data) { // Logic for parsing remains same
+    if (ollamaResponse.success && ollamaResponse.data) {
         const rawData = ollamaResponse.data;
         let parsedRelevantFieldIds: string[] = [];
         if (typeof rawData.relevantFieldIds === 'string') {
@@ -131,386 +133,298 @@ export const getRelevantFieldsFromLLMService = async (
     }
 };
 
-// --- UPDATED getRelevantFieldsForUserQueryService (Step 1 for User Query) with metadata and refined prompt ---
-const getRelevantFieldsForUserQueryService = async (
-    userQuestion: string,
-    allUserDefinedFormFields: FormDetailsForLLM['fields'] // Now {id, label, type}[]
-): Promise<{ fieldIds: string[]; reasoning: string }> => {
-    if (allUserDefinedFormFields.length === 0) { // Check if any user-defined fields exist
-        // console.log("[FieldSelectUserQuery] No user-defined fields. Query will rely on metadata if applicable.");
-    }
-
-    const userDefinedFieldsListString = allUserDefinedFormFields.map(f => `- ID: ${f.id}, Label: "${f.label}", Type: ${f.type}`).join('\n');
-
-    const promptForFieldSelection = `
-User Question: "${userQuestion}"
-
-Analyze the "User Question" to understand its core intent.
-Below is a list of available data points for each form response. This includes Standard Metadata and User-Defined Form Fields.
-
-Available Data Points:
-1. Standard Metadata (always present for each response):
-   - ID: METADATA_AUTHOR_NPUB, Type: NpubString (Submitter's unique public key)
-   - ID: METADATA_SUBMITTED_AT, Type: DateTimeString (Timestamp of submission)
-   // - ID: METADATA_SUBMISSION_COUNT, Type: Number (Count of submissions for this event, typically 1) // Temporarily comment out if data not ready
-2. User-Defined Form Fields (from this form's specific design):
-${userDefinedFieldsListString.length > 0 ? userDefinedFieldsListString : "   (No user-defined fields in this form design.)"}
-
-Task: Identify which "Available Data Points" (by their exact ID from the list above) are ESSENTIAL to answer the "User Question".
-Consider the "Type" of each data point. For example:
-- If asking "when", "on which day", "submission time", prioritize "METADATA_SUBMITTED_AT".
-- If asking "who submitted", "list of people", "authors", consider "METADATA_AUTHOR_NPUB" or user-defined fields that might contain names (e.g., Type: ShortText, Label: "Name").
-- If asking for quantitative summaries ("how many", "average X"), prefer "Number" type user-fields or situations where counting entries (like METADATA_AUTHOR_NPUB for unique submitters) makes sense.
-- If asking about opinions or feedback, prefer "LongText" or "ShortText" user-fields designed for free-form input.
-
-If the question can be answered without specific user-defined fields (e.g., only needs metadata, or is a general count of responses), return an empty array for user-defined field IDs OR select only metadata IDs.
-If the question seems unanswerable from ANY of the available data points, reflect this in your reasoning and return an empty 'selectedFieldIds' array.
-
-Use tool 'select_fields_for_user_query'.
-'selectedFieldIds': Array of essential data point IDs. Can be empty.
-'reasoningForSelection': Concise explanation for your choices or why none were chosen. REQUIRED.`;
-
-    const params: GenerateParams = {
-        prompt: promptForFieldSelection,
-        systemPrompt: SELECT_FIELDS_FOR_USER_QUERY_SYSTEM_PROMPT,
-        tools: [{
-            type: 'function' as const,
-            function: {
-                name: 'select_fields_for_user_query',
-                description: 'Selects relevant field IDs and reasoning based on a user question.',
-                parameters: SELECT_FIELDS_FOR_USER_QUERY_TOOL_SCHEMA,
-            },
-        }]
-    };
-
-    const ollamaResponse = await ollamaService.generateContent(params);
-
-    if (ollamaResponse.success && ollamaResponse.data) {
-        const { selectedFieldIds, reasoningForSelection } = ollamaResponse.data;
-        let parsedSelectedFieldIds: string[] = [];
-
-        if (Array.isArray(selectedFieldIds)) {
-            parsedSelectedFieldIds = selectedFieldIds.filter((id: any): id is string => typeof id === 'string');
-        } else if (typeof selectedFieldIds === 'string' && selectedFieldIds.trim() !== '' && selectedFieldIds.trim().toLowerCase() !== 'none') {
-            if (selectedFieldIds.startsWith('[') && selectedFieldIds.endsWith(']')) {
-                try { parsedSelectedFieldIds = JSON.parse(selectedFieldIds); } catch { /* ignore */ }
-            }
-            if (!Array.isArray(parsedSelectedFieldIds) || !parsedSelectedFieldIds.every(item => typeof item === 'string')) {
-                 parsedSelectedFieldIds = selectedFieldIds.split(',').map(id => id.trim().replace(/^"|"$/g, '')).filter(Boolean);
-            }
+interface FieldsAndDirectQueryOutput {
+    selectedDataPointIDs: string[];
+    directAnalysisQuery: string;
+}
+export const getFieldsAndDirectQueryService = async (
+    contextualPromptOrUserQuestion: string,
+    allUserDefinedFormFields: FormDetailsForLLMField[] // Updated type
+): Promise<FieldsAndDirectQueryOutput> => {
+    
+    // Modified to include options in the description for the LLM
+    const userDefinedFieldsListString = allUserDefinedFormFields.map(f => {
+        let fieldDesc = `- ID: ${f.id}, Label: "${f.label}", Type: ${f.type}`;
+        if (f.options && f.options.length > 0) {
+            fieldDesc += `, Options: [${f.options.join(', ')}]`;
         }
-        
-        // Validate IDs against available user-defined fields AND metadata IDs
-        const availableUserDefIdsSet = new Set(allUserDefinedFormFields.map(f => f.id));
-        const metadataIdsSet = new Set(['METADATA_AUTHOR_NPUB', 'METADATA_SUBMITTED_AT' /*, 'METADATA_SUBMISSION_COUNT'*/]);
-        const validatedIds = parsedSelectedFieldIds.filter(id => availableUserDefIdsSet.has(id) || metadataIdsSet.has(id));
-        
-        return {
-            fieldIds: validatedIds,
-            reasoning: typeof reasoningForSelection === 'string' ? reasoningForSelection : "AI did not provide reasoning for field selection."
-        };
-    } else {
-        throw new Error(ollamaResponse.error || "AI failed to select fields for the user query.");
-    }
-};
-
-
-// --- UPDATED determineInitialAnalysisStrategyService (Step 2 for User Query) with refined prompt & metadata awareness ---
-export const determineInitialAnalysisStrategyService = async (
-    currentRelevantDataPoints: RelevantFieldInfo[], // Can include metadata "RelevantFieldInfo"
-    formDetails: FormDetailsForLLM, 
-    userQuestion?: string
-  ): Promise<AnalysisStrategy> => {
-
-    const contextDataPointsString = currentRelevantDataPoints.map(dp => {
-        let dpType = 'unknown';
-        if (dp.id.startsWith('METADATA_')) {
-            if (dp.id === 'METADATA_AUTHOR_NPUB') dpType = 'NpubString (Submitter ID)';
-            else if (dp.id === 'METADATA_SUBMITTED_AT') dpType = 'DateTimeString (Submission Time)';
-            // else if (dp.id === 'METADATA_SUBMISSION_COUNT') dpType = 'Number (Submission Count)';
-        } else {
-            const fieldDetail = formDetails.fields.find(fd => fd.id === dp.id);
-            dpType = fieldDetail?.type || 'unknown';
-        }
-        return `- ID: ${dp.id}, Label: "${dp.label}", Type: ${dpType}`;
+        return fieldDesc;
     }).join('\n');
 
-    let userPromptForStrategy = `Task: Define a precise analysis strategy ${userQuestion ? `to answer the User Question` : `for a general overview`}.
-Use ONLY the "Context Data Points" provided below.
+    const promptForStep1 = `
+Contextual Prompt/User Question: "${contextualPromptOrUserQuestion}"
 
-${userQuestion ? `User Question: "${userQuestion}"\n` : ''}
-Context Data Points (ID, Label, Type) selected as relevant for this task:
-${contextDataPointsString || (userQuestion ? 'No specific data points were pre-selected; the User Question might be general or require inference based on overall response patterns if possible.' : 'No specific data points identified; define a general summary strategy if form has data.')}
+Available Data Points for analysis:
+1. Standard Metadata (always present for each response):
+   - ID: METADATA_AUTHOR_NPUB, Type: NpubString (Submitter's unique ID)
+   - ID: METADATA_SUBMITTED_AT, Type: DateTimeString (Submission timestamp)
+2. User-Defined Form Fields (from form design):
+${userDefinedFieldsListString.length > 0 ? userDefinedFieldsListString : "   (No user-defined fields in this form.)"}
 
-Instructions for 'define_analysis_strategy' tool output:
-1. 'suggestedAnalysisType': A very concise title for the analysis (e.g., "Count of Submissions by Date", "List of Phone Numbers", "Sentiment for Feedback Field", "Answer to: ${userQuestion ? userQuestion.substring(0,25)+'...' : 'Overall Form Summary'}").
-2. 'fieldsForAnalysis': Array of essential field IDs from "Context Data Points" that will contain the RAW DATA needed for the analysis. This might be a subset of "Context Data Points". If "Context Data Points" is empty or none are suitable for direct data extraction for the question (e.g., user asks "how many total responses?"), this array can be empty, and the 'analysisPromptToUse' should reflect how to answer (e.g., by counting response entries).
-3. 'analysisPromptToUse': Construct the EXACT prompt for the final LLM. This prompt MUST:
-    a. Clearly state the User Question (if provided) or the general analysis goal.
-    b. Instruct the LLM to use ONLY the data provided to it (which will be from 'fieldsForAnalysis', or imply general response counting if 'fieldsForAnalysis' is empty but question is about counts).
-    c. Specify the desired format/type of answer (e.g., a number, a list, a summary paragraph, a JSON object).
-    d. CRITICALLY: Instruct the LLM to use the 'perform_data_analysis' tool for its final, complete response, placing the answer in 'analysisResult' and a title in 'analysisTitle'. Example: "...Based on the data, list the phone numbers. Use 'perform_data_analysis' tool to output this list in 'analysisResult' under the title 'Extracted Phone Numbers'."
-    e. If the "Context Data Points" are insufficient to answer the User Question, the 'analysisPromptToUse' should instruct the final LLM to state this clearly in its 'analysisResult' or 'issuesOrNotes'.
-4. 'expectedOutputFormatDescription': Briefly describe the expected content of 'analysisResult' from the final LLM (e.g., "A JSON array of phone numbers.", "A sentence stating the peak submission day and count.", "A paragraph explaining why the question cannot be answered from the data.").
+Your Task (use 'select_fields_and_formulate_direct_query' tool for output):
+1.  'selectedDataPointIDs': From "Available Data Points", list IDs ESSENTIAL for the "Contextual Prompt/User Question". Consider "Type" and "Options" if provided. Can be empty if query is general (e.g. "count all responses") or no specific data points are needed.
+2.  'directAnalysisQuery': Create a clear and concise query or instruction for a *second, separate LLM*. This query should tell the second LLM what specific analysis to perform on data from the 'selectedDataPointIDs'. Example: If user asks "What is the sentiment of feedback?", 'directAnalysisQuery' could be "Analyze the sentiment of the provided feedback entries."
+`;
 
-Focus on creating a highly effective and specific 'analysisPromptToUse'. If 'Context Data Points' is empty, the strategy should reflect an attempt to answer generally or state inability if specific data is required by the 'User Question'.`;
-
+    const systemPromptForStep1 = SELECT_FIELDS_AND_FORMULATE_DIRECT_QUERY_SYSTEM_PROMPT;
     const params: GenerateParams = {
-        prompt: userPromptForStrategy,
-        systemPrompt: DEFINE_ANALYSIS_STRATEGY_SYSTEM_PROMPT,
-        tools: [{type: 'function' as const,function: {name: 'define_analysis_strategy',description: 'Defines an analysis strategy.',parameters: DEFINE_ANALYSIS_STRATEGY_TOOL_SCHEMA,},}]
-    };
-    const ollamaResponse = await ollamaService.generateContent(params);
-
-    if (ollamaResponse.success && ollamaResponse.data) {
-        const rawStrategyData = ollamaResponse.data;
-        let parsedFieldsForAnalysis: string[] = []; // Same parsing logic as before
-
-        if (typeof rawStrategyData.fieldsForAnalysis === 'string') {
-            const strVal = rawStrategyData.fieldsForAnalysis.trim();
-             if (strVal.toLowerCase() === 'none' || strVal === '') { parsedFieldsForAnalysis = [];}
-             else if (strVal.startsWith('[') && strVal.endsWith(']')) {
-                try {
-                    const tempParsed = JSON.parse(strVal);
-                    if (Array.isArray(tempParsed) && tempParsed.every(item => typeof item === 'string')) parsedFieldsForAnalysis = tempParsed;
-                    else parsedFieldsForAnalysis = strVal.replace(/^\[|\]$/g, '').split(',').map((s: string) => s.trim().replace(/^"|"$/g, '')).filter(Boolean);
-                } catch (e) { parsedFieldsForAnalysis = strVal.replace(/^\[|\]$/g, '').split(',').map((s: string) => s.trim().replace(/^"|"$/g, '')).filter(Boolean); }
-            } else { parsedFieldsForAnalysis = strVal.split(',').map((s: string) => s.trim().replace(/^"|"$/g, '')).filter(Boolean); }
-        } else if (Array.isArray(rawStrategyData.fieldsForAnalysis) && rawStrategyData.fieldsForAnalysis.every((item: any) => typeof item === 'string')) {
-            parsedFieldsForAnalysis = rawStrategyData.fieldsForAnalysis;
-        }
-
-        const strategy: AnalysisStrategy = {
-            suggestedAnalysisType: rawStrategyData.suggestedAnalysisType || (userQuestion ? `Response to: ${userQuestion.substring(0,20)}...` : "General Analysis"),
-            fieldsForAnalysis: parsedFieldsForAnalysis,
-            analysisPromptToUse: rawStrategyData.analysisPromptToUse,
-            expectedOutputFormatDescription: rawStrategyData.expectedOutputFormatDescription,
-        };
-        
-        // Validate that fieldsForAnalysis are a subset of currentRelevantDataPoints if currentRelevantDataPoints is not empty
-        if (currentRelevantDataPoints.length > 0) {
-            const relevantIdsSet = new Set(currentRelevantDataPoints.map(f => f.id));
-            strategy.fieldsForAnalysis = strategy.fieldsForAnalysis.filter(id => relevantIdsSet.has(id));
-        }
-        // If after all this, fieldsForAnalysis is empty BUT currentRelevantDataPoints was not, and it's a user question,
-        // it's possible the AI decided none of the selected points are useful for the *analysis step itself*. This is fine.
-        // The `analysisPromptToUse` should then reflect this (e.g., state inability or use general counts).
-        return strategy;
-    } else {
-      throw new Error(ollamaResponse.error || "AI failed to define analysis strategy.");
-    }
-};
-
-// --- UPDATED prepareDataForAnalysisService with metadata handling ---
-export const prepareDataForAnalysisService = (
-    fieldIdsToAnalyze: string[], // Can now include METADATA_ IDs
-    allResponses: Event[],
-    currentFormSpec: Tag[], 
-    currentEditKey?: string | null
-  ): string => {
-    let combinedData = "";
-    if (!allResponses || allResponses.length === 0) {
-        // console.log("[PrepareData] No responses to prepare. Returning empty data.");
-        return "";
-    }
-    // No need to check fieldIdsToAnalyze here, as an empty array might be intentional
-    // for prompts that do general counting or summarization without specific field data.
-
-    // console.log(`[PrepareData] Preparing data for IDs: [${fieldIdsToAnalyze.join(', ')}] from ${allResponses.length} responses.`);
-    
-    allResponses.forEach((responseEvent: Event, index: number) => { 
-        const userDefinedInputs = getInputsFromResponseEvent(responseEvent, currentEditKey);
-        let responseEntry = `--- Response Entry ${index + 1} (Submitter ID: ${nip19.npubEncode(responseEvent.pubkey).substring(0,15)}...) ---\n`;
-        let hasDataForThisResponseEntry = false; // Tracks if *any* data (meta or user) is added for this entry
-
-        // Always include fixed metadata if requested or implicitly useful
-        const submissionTime = new Date(responseEvent.created_at * 1000).toISOString();
-        responseEntry += `  Field: "Submission Time"\n  Answer: ${submissionTime}\n`;
-        hasDataForThisResponseEntry = true; // Submission time is always data
-
-        // Only process fieldIdsToAnalyze if it's not empty
-        if (fieldIdsToAnalyze.length > 0) {
-            let specificFieldDataAdded = false;
-            fieldIdsToAnalyze.forEach((fieldId: string) => { 
-                let fieldLabel = `Field ID ${fieldId}`;
-                let answerValue: string | null = null;
-
-                if (fieldId === 'METADATA_AUTHOR_NPUB') {
-                    fieldLabel = "Author Npub"; // Consistent label
-                    answerValue = nip19.npubEncode(responseEvent.pubkey);
-                } else if (fieldId === 'METADATA_SUBMITTED_AT') {
-                    fieldLabel = "Submitted At"; // Consistent label
-                    answerValue = submissionTime; // Already have it
-                }
-                // else if (fieldId === 'METADATA_SUBMISSION_COUNT') { ... } // Still tricky, omit for now
-                else { // User-defined field
-                    const fieldSpecTag = currentFormSpec.find((tag: Tag) => tag[0] === 'field' && tag[1] === fieldId) as Field | undefined;
-                    if (fieldSpecTag && fieldSpecTag[3]) {
-                       fieldLabel = fieldSpecTag[3];
-                    }
-                    const relevantInput = userDefinedInputs.find(input => input[1] === fieldId);
-                    if (relevantInput) {
-                        const { responseLabel } = getResponseLabels(relevantInput, currentFormSpec);
-                        if (responseLabel && responseLabel.trim().toLowerCase() !== "n/a" && responseLabel.trim() !== "") {
-                            answerValue = responseLabel;
-                        }
-                    }
-                }
-
-                if (answerValue !== null) {
-                    // Avoid duplicating submission time if it was explicitly requested
-                    if (fieldId !== 'METADATA_SUBMITTED_AT') { // since it's already added above unconditionally
-                        responseEntry += `  Field: "${fieldLabel}"\n  Answer: ${answerValue}\n`;
-                    }
-                    specificFieldDataAdded = true;
-                }
-            });
-            if(specificFieldDataAdded) hasDataForThisResponseEntry = true;
-        }
-        
-        responseEntry += "\n"; // Add a blank line after each entry's fields or just after metadata
-
-        if (hasDataForThisResponseEntry) { // Only add entry if it has at least metadata
-            combinedData += responseEntry;
-        }
-    });
-    // console.log(`[PrepareData] Combined data length for LLM: ${combinedData.length}`);
-    return combinedData;
-};
-
-// --- executeAutomatedAnalysisService - No changes needed, relies on EXECUTE_ANALYSIS_SYSTEM_PROMPT ---
-// packages/formstr-app/src/services/aiAnalysisService.ts
-// ... (imports and other functions as previously provided) ...
-
-// --- executeAutomatedAnalysisService - Check this function ---
-export const executeAutomatedAnalysisService = async (
-    strategy: AnalysisStrategy, // strategy IS a parameter here
-    preparedData: string
-  ): Promise<StructuredAnalysisOutput> => {
-    const fullUserPromptForExecution = `${strategy.analysisPromptToUse}\n\nHere is the data to analyze:\n${preparedData}`;
-    const params: GenerateParams = {
-        prompt: fullUserPromptForExecution,
-        systemPrompt: EXECUTE_ANALYSIS_SYSTEM_PROMPT,
+        prompt: promptForStep1,
+        systemPrompt: systemPromptForStep1,
         tools: [{
             type: 'function' as const,
             function: {
-                name: 'perform_data_analysis',
-                description: 'Structures the output of a data analysis task.',
-                parameters: GENERAL_ANALYSIS_OUTPUT_TOOL_SCHEMA,
+                name: 'select_fields_and_formulate_direct_query',
+                description: 'Selects relevant data points and formulates a direct analysis query for the next LLM.',
+                parameters: SELECT_FIELDS_AND_FORMULATE_DIRECT_QUERY_TOOL_SCHEMA,
             },
         }]
     };
+
+    console.log("DEBUG: AIAnalysisService - Step 1 - Input to LLM:", JSON.stringify(params, null, 2));
     const ollamaResponse = await ollamaService.generateContent(params);
+    console.log("DEBUG: AIAnalysisService - Step 1 - Raw LLM Output Data:", JSON.stringify(ollamaResponse.data, null, 2));
+
     if (ollamaResponse.success && ollamaResponse.data) {
-        const toolOutput = ollamaResponse.data as { analysisTitle: string; analysisResult: string; issuesOrNotes?: string };
-        let finalResult: string | object = toolOutput.analysisResult;
-        if (strategy.expectedOutputFormatDescription && strategy.expectedOutputFormatDescription.toLowerCase().includes("json") && typeof toolOutput.analysisResult === 'string') {
-            try {
-                const jsonMatch = toolOutput.analysisResult.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*}|\[[\s\S]*\])/);
-                if (jsonMatch) {
-                    const jsonString = jsonMatch[1] || jsonMatch[2]; 
-                    finalResult = JSON.parse(jsonString);
-                } else {
-                    finalResult = JSON.parse(toolOutput.analysisResult);
-                }
-            } catch (e) {
-                // console.warn(`'analysisResult' was expected to be JSON based on description, but failed to parse. Content: "${toolOutput.analysisResult}". Error: ${e}`);
+        const { selectedDataPointIDs, directAnalysisQuery } = ollamaResponse.data;
+        
+        let parsedSelectedIDs: string[] = [];
+        if (Array.isArray(selectedDataPointIDs)) {
+            parsedSelectedIDs = selectedDataPointIDs.filter((id: any): id is string => typeof id === 'string');
+        } else if (typeof selectedDataPointIDs === 'string' && selectedDataPointIDs.trim() !== '' && selectedDataPointIDs.trim().toLowerCase() !== 'none') {
+            if (selectedDataPointIDs.startsWith('[') && selectedDataPointIDs.endsWith(']')) {
+                try { parsedSelectedIDs = JSON.parse(selectedDataPointIDs); } catch { /* ignore */ }
+            }
+            if (!Array.isArray(parsedSelectedIDs) || !parsedSelectedIDs.every(item => typeof item === 'string')) {
+                 parsedSelectedIDs = selectedDataPointIDs.split(',').map(id => id.trim().replace(/^"|"$/g, '')).filter(Boolean);
             }
         }
+        
+        const availableUserDefIdsSet = new Set(allUserDefinedFormFields.map(f => f.id));
+        const metadataIdsSet = new Set(['METADATA_AUTHOR_NPUB', 'METADATA_SUBMITTED_AT']);
+        const validatedIDs = parsedSelectedIDs.filter(id => availableUserDefIdsSet.has(id) || metadataIdsSet.has(id));
+
+        if (!directAnalysisQuery || typeof directAnalysisQuery !== 'string' || directAnalysisQuery.trim() === "") {
+            throw new Error("AI failed to generate a valid 'directAnalysisQuery'.");
+        }
+        
         return {
-            analysisTitle: toolOutput.analysisTitle,
-            analysisResult: finalResult,
-            issuesOrNotes: toolOutput.issuesOrNotes
+            selectedDataPointIDs: validatedIDs,
+            directAnalysisQuery: directAnalysisQuery,
         };
     } else {
-        throw new Error(ollamaResponse.error || "AI failed to execute the analysis strategy.");
+        throw new Error(ollamaResponse.error || "AI failed at Step 1 (select fields and formulate direct query).");
     }
 };
 
-// --- processUserQuery - Check calls here ---
+// --- prepareDataForAnalysisService - Modified to only include data for selected IDs ---
+// packages/formstr-app/src/services/aiAnalysisService.ts
+
+// ... (other imports and FormDetailsForLLM interfaces remain the same) ...
+// ... (extractFormDetails, generateRelevanceUserPrompt, getRelevantFieldsFromLLMService, getFieldsAndDirectQueryService remain the same from the last version) ...
+
+// --- prepareDataForAnalysisService - Implementing Numbered Field Mapping ---
+export const prepareDataForAnalysisService = (
+    fieldIdsToAnalyze: string[], // These are the selectedDataPointIDs from Step 1
+    allResponses: Event[],
+    currentFormSpec: Tag[],
+    currentEditKey?: string | null
+  ): string => {
+    if (!allResponses || allResponses.length === 0) {
+        return "(No responses have been submitted to this form yet.)";
+    }
+    if (!fieldIdsToAnalyze || fieldIdsToAnalyze.length === 0) {
+        return "(No specific data fields were selected for analysis.)";
+    }
+
+    // 1. Create Field Key
+    // Map selected field IDs to their labels for the key
+    const fieldKeyMapping: { id: string; label: string }[] = fieldIdsToAnalyze.map(id => {
+        if (id === 'METADATA_AUTHOR_NPUB') return { id, label: "Author Npub (Not included in response data)" }; // Label for key, but data excluded
+        if (id === 'METADATA_SUBMITTED_AT') return { id, label: "Submission Time" };
+        
+        const fieldSpecTag = currentFormSpec.find((tag: Tag): tag is Field => tag[0] === 'field' && tag[1] === id);
+        return { id, label: fieldSpecTag && fieldSpecTag[3] ? fieldSpecTag[3] : `Unknown Field (ID: ${id})` };
+    });
+
+    let fieldKeyString = "Field Key:\n";
+    fieldKeyMapping.forEach((field, index) => {
+        // We will not include METADATA_AUTHOR_NPUB in the actual numbered key presented to LLM for response data
+        if (field.id !== 'METADATA_AUTHOR_NPUB') {
+            fieldKeyString += `${index + 1}: "${field.label}"\n`;
+        }
+    });
+    
+    // Filter out METADATA_AUTHOR_NPUB from the actual mapping used for data rows
+    const activeFieldKeyMapping = fieldKeyMapping.filter(f => f.id !== 'METADATA_AUTHOR_NPUB');
+    if (activeFieldKeyMapping.length === 0) {
+        return "(No data fields selected for analysis after filtering.)"
+    }
+    // Rebuild fieldKeyString with only active fields for numbering consistency
+    fieldKeyString = "Field Key:\n";
+     activeFieldKeyMapping.forEach((field, index) => {
+        fieldKeyString += `${index + 1}: "${field.label}"\n`;
+    });
+
+
+    // 2. Process Each Response to create positional answer arrays
+    const responseDataStrings: string[] = [];
+    allResponses.forEach((responseEvent: Event, entryIndex: number) => {
+        const userDefinedInputs = getInputsFromResponseEvent(responseEvent, currentEditKey);
+        const responseAnswers: (string | null)[] = []; // Array to hold answers for current response
+        let hasAtLeastOneAnswerForThisResponse = false;
+
+        activeFieldKeyMapping.forEach(mappedField => {
+            let answer: string | null = "N/A"; // Default if no answer found or for excluded fields
+
+            if (mappedField.id === 'METADATA_SUBMITTED_AT') {
+                answer = new Date(responseEvent.created_at * 1000).toISOString();
+            } else {
+                // User-defined field
+                const relevantInput = userDefinedInputs.find(input => input[1] === mappedField.id);
+                if (relevantInput) {
+                    const { responseLabel: rawResponseLabel } = getResponseLabels(relevantInput, currentFormSpec);
+                    const responseLabelAsString = String(rawResponseLabel ?? '');
+                    if (responseLabelAsString && responseLabelAsString.trim().toLowerCase() !== "n/a" && responseLabelAsString.trim() !== "") {
+                        answer = responseLabelAsString;
+                        hasAtLeastOneAnswerForThisResponse = true;
+                    }
+                }
+            }
+            responseAnswers.push(answer);
+        });
+
+        // Only add entry if it has some meaningful data for the selected fields (beyond just N/A for all)
+        // or if specific metadata like submission time was requested and is present.
+        // For simplicity, we'll add the row if any selected user field had an answer, or if submission time was selected.
+        // A more robust check could be if not all answers are "N/A".
+        if (hasAtLeastOneAnswerForThisResponse || activeFieldKeyMapping.some(mf => mf.id === 'METADATA_SUBMITTED_AT')) {
+             responseDataStrings.push(`- Entry ${entryIndex + 1}: ${JSON.stringify(responseAnswers)}`);
+        }
+    });
+
+    if (responseDataStrings.length === 0) {
+        return `${fieldKeyString}\n(No responses contained data for the selected fields.)`;
+    }
+
+    // 3. Construct Final String
+    const explanation = "Data for Analysis:\nPlease use the 'Field Key' below to understand the data in 'Responses'. Each response entry is a list of answers corresponding to the numbered fields in the key. 'N/A' or null indicates no answer was provided for that field in that response.\n\n";
+    const finalDataString = explanation + fieldKeyString + "\nResponses:\n" + responseDataStrings.join("\n");
+    
+    return finalDataString;
+};
+
+// ... (executeDirectAnalysisService and processUserQuery will use this new data format)
+// ... (The rest of aiAnalysisService.ts: extractFormDetails, getFieldsAndDirectQueryService, 
+//      executeDirectAnalysisService, processUserQuery should remain as per the previous correct version,
+//      they don't need to change for this specific data formatting update within prepareDataForAnalysisService)
+
+
+export const executeDirectAnalysisService = async (
+    directAnalysisQueryFromStep1: string,
+    preparedData: string
+  ): Promise<string> => {
+    // If preparedData is one of our "no data" messages, we might want to append it to the query
+    // or let the LLM handle it based on the query.
+    let finalQuery = directAnalysisQueryFromStep1;
+    if (preparedData.startsWith("(No specific data points were selected") || preparedData.startsWith("(No matching data found for the selected analysis points")) {
+        finalQuery += `\n\nNote on Data: ${preparedData}`;
+    }
+
+    const fullUserPromptForExecution = `${finalQuery}\n\nData for Analysis (if specific data points were selected and found):\n${(preparedData.startsWith("(No specific data points were selected") || preparedData.startsWith("(No matching data found for the selected analysis points")) ? "(See note above regarding data availability)" : preparedData.trim()}`;
+    
+    const systemPromptForStep2 = EXECUTE_DIRECT_ANALYSIS_SYSTEM_PROMPT;
+    const params: GenerateParams = {
+        prompt: fullUserPromptForExecution,
+        systemPrompt: systemPromptForStep2,
+    };
+
+    console.log("DEBUG: AIAnalysisService - Step 2 - Input to LLM:", JSON.stringify(params, null, 2));
+    const ollamaResponse = await ollamaService.generateContent(params);
+    
+    let aiDirectResponseText = "";
+    if (ollamaResponse.success) {
+        if (typeof ollamaResponse.data === 'string') {
+            aiDirectResponseText = ollamaResponse.data;
+        } else if (ollamaResponse.rawResponse && typeof ollamaResponse.rawResponse === 'string') {
+            aiDirectResponseText = ollamaResponse.rawResponse;
+        } else if (ollamaResponse.data && ollamaResponse.data.message && typeof ollamaResponse.data.message.content === 'string') {
+             aiDirectResponseText = ollamaResponse.data.message.content;
+        } else {
+            console.warn("DEBUG: AIAnalysisService - Step 2 - LLM response successful but direct text not found. Response:", ollamaResponse);
+            aiDirectResponseText = "AI provided a response, but its content could not be directly extracted.";
+        }
+    } else {
+        throw new Error(ollamaResponse.error || "AI failed to execute the direct analysis task (Step 2).");
+    }
+    console.log("DEBUG: AIAnalysisService - Step 2 - Raw LLM Direct Output Text:", aiDirectResponseText);
+    return aiDirectResponseText;
+};
+
 export const processUserQuery = async (
   userQuestion: string,
   formDetails: FormDetailsForLLM,
   currentFormSpec: Tag[],
   allResponses: Event[],
   editKey?: string | null
-): Promise<StructuredAnalysisOutput> => {
-  // ... (initial checks for userQuestion, allResponses, formDetails.fields, currentFormSpec) ...
-  // Ensure these checks are present as in the previous full code block
+): Promise<ProcessedUserQueryOutput> => {
+  
+  if (!userQuestion.trim()) return { aiResponseText: "", issuesOrNotes: "Query was empty."};
+  // Allowing analysis even if no responses, as query might be about form structure
+  // if (!allResponses || allResponses.length === 0) return { aiResponseText: "No responses available to analyze for this question.", issuesOrNotes: "No response data provided."};
+  if (!formDetails || !formDetails.fields) return { aiResponseText: "Form structure details are missing.", issuesOrNotes: "formDetails not provided or incomplete." };
+  if (!currentFormSpec || currentFormSpec.length === 0) return { aiResponseText: "Internal error with form specification.", issuesOrNotes: "currentFormSpec not provided."};
 
   try {
-    console.log(`[UserQuery Step 1] Identifying relevant data points for question: "${userQuestion}"`);
-    const { fieldIds: relevantDataPointIds, reasoning: fieldSelectionReasoning } = await getRelevantFieldsForUserQueryService(userQuestion, formDetails.fields);
-    console.log(`[UserQuery Step 1] AI selected data point IDs: [${relevantDataPointIds.join(', ')}]. Reasoning: ${fieldSelectionReasoning}`);
-
-    const relevantDataPointsForStrategy: RelevantFieldInfo[] = relevantDataPointIds.map(id => {
-        if (id === 'METADATA_AUTHOR_NPUB') return { id, label: 'Author Npub' };
-        if (id === 'METADATA_SUBMITTED_AT') return { id, label: 'Submission Time' };
-        const field = formDetails.fields.find(f => f.id === id);
-        return { id, label: field ? field.label : id };
-    });
-    
-    if (relevantDataPointIds.length === 0 && !userQuestion.toLowerCase().match(/how many responses|total submissions|count responses/)) {
-      console.warn(`[UserQuery Step 1] AI selected no specific data points. Reasoning: ${fieldSelectionReasoning}. Question might be too general or unanswerable from form fields.`);
-    }
-    
-    console.log(`[UserQuery Step 2] Defining analysis strategy for question: "${userQuestion}" using ${relevantDataPointsForStrategy.length} context point(s).`);
-    // Calling determineInitialAnalysisStrategyService with 3 arguments
-    const strategyForUserQuery: AnalysisStrategy = await determineInitialAnalysisStrategyService(
-      relevantDataPointsForStrategy,
-      formDetails, 
-      userQuestion
+    console.log(`[UserQuery - Step 1] Getting fields & direct query for: "${userQuestion}"`);
+    const { selectedDataPointIDs, directAnalysisQuery } = await getFieldsAndDirectQueryService(
+        userQuestion,
+        formDetails.fields // This now includes options in its description to LLM
     );
-    console.log(`[UserQuery Step 2] Strategy: ${strategyForUserQuery.suggestedAnalysisType}. Fields for analysis step: [${strategyForUserQuery.fieldsForAnalysis.join(', ')}]`);
+    console.log(`[UserQuery - Step 1] Selected IDs: [${selectedDataPointIDs.join(', ')}]`);
+    console.log(`[UserQuery - Step 1] Generated Direct Analysis Query for Step 2:\n${directAnalysisQuery}`);
 
-    if (strategyForUserQuery.fieldsForAnalysis.length === 0 && relevantDataPointIds.length > 0) {
-        // This case: AI selected relevant points for the question (step 1), but then the strategy (step 2)
-        // decided that for the *actual data extraction and analysis*, no fields are needed from that selection.
-        // This can be valid if the question is answerable by just counting responses or general context
-        // that prepareDataForAnalysisService might still provide (like submission times).
-        console.warn(`[UserQuery Step 2] Strategy decided no specific fields needed for data extraction from those AI selected as relevant. This might be okay for general queries.`)
-    } else if (strategyForUserQuery.fieldsForAnalysis.length === 0 && relevantDataPointIds.length === 0) {
-         // AI selected no relevant fields, and strategy also selected no fields for analysis.
-         // It is highly likely the question cannot be answered with specific data.
-         // The final LLM call (Step 3) should be instructed to state this.
-         console.warn(`[UserQuery Step 2] No relevant fields identified by AI, and strategy confirms no specific fields for analysis. Final LLM will be prompted accordingly.`);
+    if (!directAnalysisQuery) {
+        return { aiResponseText: "The AI could not determine how to proceed with your question.", issuesOrNotes: `Failed to generate the direct analysis query.` };
     }
 
-
-    console.log(`[UserQuery Step 3] Preparing data based on strategy fields: [${strategyForUserQuery.fieldsForAnalysis.join(', ')}]`);
-    // Calling prepareDataForAnalysisService with 4 arguments
-    const preparedData: string = prepareDataForAnalysisService(
-      strategyForUserQuery.fieldsForAnalysis, 
-      allResponses,
-      currentFormSpec,
-      editKey
-    );
-
-    if (strategyForUserQuery.fieldsForAnalysis.length > 0 && !preparedData.trim()) {
+    let preparedData = "";
+    let issuesNotesForNoData = "";
+    if (allResponses && allResponses.length > 0) {
+        console.log(`[UserQuery - Step 2a] Preparing data for IDs: [${selectedDataPointIDs.join(', ')}]`);
+        preparedData = prepareDataForAnalysisService(
+          selectedDataPointIDs,
+          allResponses,
+          currentFormSpec,
+          editKey
+        );
+        if (preparedData.startsWith("(No matching data found for the selected analysis points")) {
+            issuesNotesForNoData = preparedData; // Capture this note
+        }
+    } else {
+        preparedData = "(No responses have been submitted to this form yet.)";
+        issuesNotesForNoData = preparedData;
+    }
+    
+    const isGeneralCountQuery = directAnalysisQuery.toLowerCase().match(/count responses|total submissions|number of entries|describe the form structure|what are the questions/);
+    if (selectedDataPointIDs.length > 0 && !isGeneralCountQuery && preparedData.startsWith("(") && preparedData.includes("No matching data")) {
       return {
-        analysisTitle: strategyForUserQuery.suggestedAnalysisType || `Response to: "${userQuestion.substring(0, 30)}..."`,
-        analysisResult: "Could not find any relevant text in the selected field(s) to answer your question based on the chosen strategy.",
-        issuesOrNotes: `Data preparation for fields [${strategyForUserQuery.fieldsForAnalysis.join(', ')}] yielded no content. Field selection reasoning for this query: ${fieldSelectionReasoning}`
+        aiResponseText: "Could not find any relevant text in the selected data point(s) to answer your question.",
+        issuesOrNotes: issuesNotesForNoData || `Data preparation for [${selectedDataPointIDs.join(', ')}] yielded no content.`
       };
     }
     
-    console.log(`[UserQuery Step 3] Executing analysis: ${strategyForUserQuery.suggestedAnalysisType}`);
-    // Calling executeAutomatedAnalysisService with 2 arguments
-    const finalOutput: StructuredAnalysisOutput = await executeAutomatedAnalysisService(strategyForUserQuery, preparedData); // strategyForUserQuery is the 'strategy'
+    console.log(`[UserQuery - Step 2b] Executing generated direct analysis query.`);
+    const aiDirectResponse = await executeDirectAnalysisService(directAnalysisQuery, preparedData);
     
-    // ... (rest of the logging and return logic for finalOutput) ...
-    if (fieldSelectionReasoning && fieldSelectionReasoning.length > 30 && !fieldSelectionReasoning.toLowerCase().includes("obvious") && !fieldSelectionReasoning.toLowerCase().includes("as requested")) {
-        finalOutput.issuesOrNotes = `Field Selection Insight: ${fieldSelectionReasoning}${finalOutput.issuesOrNotes ? ` | ${finalOutput.issuesOrNotes}` : ''}`;
-    } else {
-        console.log(`[UserQuery Field Selection Reasoning (not shown to user)]: ${fieldSelectionReasoning}`);
-    }
-    return finalOutput;
+    return {
+        aiResponseText: aiDirectResponse,
+        issuesOrNotes: issuesNotesForNoData && aiDirectResponse.length > 0 ? issuesNotesForNoData : undefined // Only add note if AI still gave a response
+    };
 
   } catch (error: any) {
-    console.error("Error during processUserQuery:", error);
+    console.error("Error during 2-step processUserQuery:", error);
     return {
-      analysisTitle: "Error Processing Question",
-      analysisResult: "An unexpected error occurred.",
+      aiResponseText: "An unexpected error occurred while the AI was processing your question.",
       issuesOrNotes: error.message || "Unknown AI processing error."
     };
   }
