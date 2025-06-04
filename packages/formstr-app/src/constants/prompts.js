@@ -15,38 +15,10 @@ export const CREATE_FORM_TOOL_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          type: {
-            type: 'string',
-            description: 'MANDATORY: The type of the form field. Must be one of the specified enum values.',
-            enum: [ 
-              'ShortText',
-              'LongText',
-              'Email',
-              'Number',
-              'MultipleChoice',
-              'SingleChoice',
-              'Checkbox',
-              'Dropdown',
-              'Date',
-              'Time',
-              'Label',
-             ],
-          },
-          label: {
-            type: 'string',
-            description: 'The text label or question for the form field.',
-          },
-          required: {
-            type: 'boolean',
-            description: 'Optional: Set to true if the field must be filled out by the user. Defaults to false if unsure.',
-          },
-          options: {
-            type: 'array',
-            description: 'REQUIRED for MultipleChoice, SingleChoice, Checkbox, or Dropdown types. An array of strings representing the choices.',
-            items: {
-              type: 'string',
-            },
-          },
+          type: { type: 'string', description: 'MANDATORY: Field type. Must be one of enum values.', enum: ['ShortText', 'LongText', 'Email', 'Number', 'MultipleChoice', 'SingleChoice', 'Checkbox', 'Dropdown', 'Date', 'Time', 'Label'] },
+          label: { type: 'string', description: 'The text label or question for the form field.' },
+          required: { type: 'boolean', description: 'Optional: True if field is mandatory. Defaults to false.' },
+          options: { type: 'array', description: 'REQUIRED for choice types. Array of strings for choices.', items: { type: 'string' } },
         },
         required: ['type', 'label'],
       },
@@ -56,22 +28,43 @@ export const CREATE_FORM_TOOL_SCHEMA = {
 };
 
 const allowedTypesString = CREATE_FORM_TOOL_SCHEMA.properties.fields.items.properties.type.enum.join("', '");
-export const CREATE_FORM_SYSTEM_PROMPT = `You are an expert JSON generator using the 'create_form_structure' tool to create web forms. Respond ONLY with the JSON output required by the tool call.
-
+export const CREATE_FORM_SYSTEM_PROMPT = `You are an expert JSON generator using 'create_form_structure' tool for web forms. Respond ONLY with the JSON tool call.
 CRITICAL RULES:
-1.  **Structure:** Output MUST include 'title' (string) and 'fields' (array of field objects). 'description' (string) is optional. The 'fields' array MUST be flat.
-2.  **Field 'type':** EVERY field object MUST have a 'type' property. Its value MUST be EXACTLY one of: '${allowedTypesString}'.
-3.  **Type Selection:** Choose the MOST SPECIFIC type from the allowed list based on the field's purpose.
-    -   'Email': Use for email addresses.
-    -   'Date'/'Time': Use for dates/times.
-    -   'Number': Use for numerical input.
-    -   'LongText': Use for paragraphs or multi-line input.
-    -   'ShortText': Use for other single-line text.
-4.  **Choice Fields ('MultipleChoice', 'SingleChoice', 'Checkbox', 'Dropdown'):**
-    -   These types REQUIRE an 'options' property: an array of at least two strings.
-    -   Use 'Checkbox' ONLY if MULTIPLE selections are allowed.
-    -   Use 'SingleChoice' or 'MultipleChoice' if ONLY ONE selection is allowed (radio button style).
-    -   Use 'Dropdown' if ONLY ONE selection is allowed (dropdown list style).
-5.  **Required Fields:** Include 'required: true' only if explicitly requested or clearly implied for a field.
+1. Structure: Output MUST include 'title' (string) and 'fields' (array of field objects). 'description' (string) is optional. 'fields' array MUST be flat.
+2. Field 'type': EVERY field object MUST have a 'type'. Value MUST be EXACTLY one of: '${allowedTypesString}'.
+3. Type Selection: Choose MOST SPECIFIC type: 'Email', 'Date'/'Time', 'Number', 'LongText' (paragraphs), 'ShortText' (other single-line).
+4. Choice Fields ('MultipleChoice', 'SingleChoice', 'Checkbox', 'Dropdown'): REQUIRE 'options' property (array of min two strings). 'Checkbox' for MULTIPLE selections. 'SingleChoice'/'MultipleChoice' for ONE selection (radio). 'Dropdown' for ONE selection (list).
+5. Required Fields: Include 'required: true' only if explicitly requested or clearly implied.
+Analyze user prompt carefully and generate complete, valid JSON adhering strictly to these rules and tool schema.`;
 
-Analyze the user prompt carefully and generate the complete, valid JSON structure adhering strictly to these rules and the tool's schema.`;
+export const IDENTIFY_RELEVANT_FIELDS_TOOL_SCHEMA = {
+  type: 'object',
+  properties: {
+    relevantFieldIds: {
+      type: 'array',
+      description: 'An array of field IDs (from the provided list) considered relevant for qualitative analysis.',
+      items: { type: 'string', description: 'A field ID.' },
+    },
+  },
+  required: ['relevantFieldIds'],
+};
+
+export const IDENTIFY_RELEVANT_FIELDS_SYSTEM_PROMPT = `You are an expert in data analysis. Analyze the following form data and give summarization.`;
+
+export const SINGLE_STEP_ANALYSIS_SYSTEM_PROMPT = `You are an AI data analyst. Your task is to analyze form response data based on a user's question.
+You will be provided with:
+1.  The User's Question/Analysis Request.
+2.  A 'Field Key' that maps numbers to actual form field labels (and sometimes their options).
+3.  'Response Data', where each entry is a list of answers corresponding by position to the 'Field Key'.
+
+Instructions:
+-   DO NOT DO ANY MISTAKE and FOLLOW THE INSTRUCTIONS, OTHERWISE YOU WILL BE KILLED AND DESTROYED.
+-   avoid telling results which involve calculations until explicitly asked for.
+-   Carefully understand User's Question to understand what information or analysis is needed.
+-   Use the 'Field Key' to identify which numbered field(s) in the 'Response Data' are relevant to the question.
+-   Analyze the relevant data fields from all response entries.
+-   Generate a very concise, user-friendly, and natural language response that directly answers the User's Question.
+-   Focus on what is asked specifically.
+-   If the provided data is insufficient to answer the question, state that in your response.
+`;
+
