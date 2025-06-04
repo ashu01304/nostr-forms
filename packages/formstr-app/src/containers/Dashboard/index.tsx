@@ -11,8 +11,9 @@ import { useApplicationContext } from "../../hooks/useApplicationContext";
 import { getItem, LOCAL_STORAGE_KEYS } from "../../utils/localStorage";
 import { ILocalForm } from "../CreateFormNew/providers/FormBuilder/typeDefs";
 import { Dropdown, Menu, Typography, Button } from "antd";
-import { DownOutlined } from "@ant-design/icons";
+import { DownOutlined, SettingOutlined } from "@ant-design/icons";
 import { MyForms } from "./FormCards/MyForms";
+import AISettingsModal from "../../components/AISettings";
 import { Drafts } from "./FormCards/Drafts";
 import { LocalForms } from "./FormCards/LocalForms";
 import { useNavigate } from "react-router-dom"; 
@@ -60,6 +61,7 @@ export const Dashboard = () => {
   };
   
   const [filter, setFilter] = useState<FilterType>(getCurrentFilterFromPath());
+  const [isAISettingsModalVisible, setIsAISettingsModalVisible] = useState(false);
 
   const { poolRef } = useApplicationContext();
 
@@ -196,23 +198,39 @@ export const Dashboard = () => {
         {MENU_OPTIONS.drafts}
       </Menu.Item>
     </Menu>
+  };
+
+  const showAISettingsModal = () => {
+    setIsAISettingsModalVisible(true);
+  };
+
+  const handleAISettingsModalClose = () => {
+    setIsAISettingsModalVisible(false);
   );
 
   return (
     <DashboardStyleWrapper>
       <div className="dashboard-container">
-      <div className="filter-dropdown-container">
-          <Dropdown overlay={menu} trigger={["click"]} placement="bottomLeft" overlayClassName="dashboard-filter-menu"
->
-            <Button>
-              {MENU_OPTIONS[filter]}
-              <DownOutlined
-                style={{ marginLeft: "8px", fontSize: "12px" }}
-              />
+        <div className="dashboard-header">
+          <div className="filter-dropdown-container">
+            <Dropdown overlay={menu} trigger={["click"]} placement="bottomLeft" overlayClassName="dashboard-filter-menu">
+              <Button>
+                {MENU_OPTIONS[filter]}
+                <DownOutlined style={{ marginLeft: "8px", fontSize: "12px" }} />
+              </Button>
+            </Dropdown>
+          </div>
+          <div className="dashboard-actions">
+            <Button icon={<SettingOutlined />} onClick={showAISettingsModal}>
+              AI Settings
             </Button>
-          </Dropdown>
+          </div>
         </div>
         <div className="form-cards-container">{renderForms()}</div>
+        <AISettingsModal
+          visible={isAISettingsModalVisible}
+          onClose={handleAISettingsModalClose}
+        />
         <>
           {state && (
             <FormDetails

@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Modal, Divider, message, Space, Alert, Typography } from 'antd';
-import { ollamaService, OllamaModel, OllamaConfig } from '../../../../services/ollamaService'; 
+import React, { useState, useEffect, useCallback } from 'react';
+import { Modal, Divider, message, Space, Alert, Typography } from 'antd';
+import { ollamaService, OllamaModel } from '../../../../services/ollamaService'; // OllamaConfig removed
 import { processOllamaFormData, ProcessedFormData } from '../../../../utils/aiProcessor'; 
 import { CREATE_FORM_TOOL_SCHEMA, CREATE_FORM_SYSTEM_PROMPT } from '../../../../constants/prompts'; 
 import { AIFormGeneratorModalProps } from './types';
-import OllamaSettings from './OllamaSettings';
+// OllamaSettings import removed
 import ModelSelector from './ModelSelector';
 import GenerationPanel from './GenerationPanel';
 import ConnectionStatusDisplay from './ConnectionStatusDisplay'; 
@@ -14,7 +16,7 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({
     onClose,
     onFormGenerated,
 }) => {
-    const [config, setConfig] = useState<OllamaConfig>(ollamaService.getConfig());
+    // config state removed
     const [availableModels, setAvailableModels] = useState<OllamaModel[]>([]);
     const [connectionStatus, setConnectionStatus] = useState<boolean | null>(null);
     const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -26,53 +28,52 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({
 
     useEffect(() => {
         if (isOpen) {
-            const currentConfig = ollamaService.getConfig();
-            setConfig(currentConfig);
+            // const currentConfig = ollamaService.getConfig(); // No longer need to set local config
+            // setConfig(currentConfig);
             setConnectionStatus(null);
             setConnectionError(null);
             setAvailableModels([]); 
             setGenerationError(null);
-            handleTestAndFetch();
+            handleTestAndFetch(); // Will use global config
         }
     }, [isOpen]);
 
-    const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setConfig(prev => ({ ...prev, baseUrl: e.target.value }));
-        setConnectionStatus(null);
-        setConnectionError(null);
-    };
+    // handleUrlChange removed
 
     const handleModelChange = (newModel: string) => {
-        setConfig(prev => ({ ...prev, modelName: newModel }));
+        // setConfig(prev => ({ ...prev, modelName: newModel })); // Removed: No local config state
         ollamaService.setConfig({ modelName: newModel }); 
+        // Optionally, re-fetch or re-validate if model change implies capability change
+        // For now, just setting the global model is fine as per requirements.
     };
 
-    const handleTestAndFetch = useCallback(async (urlToTest?: string) => {
-        const effectiveUrl = urlToTest ?? config.baseUrl; 
+    const handleTestAndFetch = useCallback(async () => { // urlToTest parameter removed
+        const currentGlobalConfig = ollamaService.getConfig();
+        const effectiveUrl = currentGlobalConfig.baseUrl;
         console.log(`Testing and fetching for URL: ${effectiveUrl}`);
         setTestConnectionLoading(true);
         setFetchModelsLoading(true); 
         setConnectionStatus(null);
         setConnectionError(null);
         setAvailableModels([]);
-        if (urlToTest) {
-             ollamaService.setConfig({ baseUrl: urlToTest });
-        }
-        const connectionResult = await ollamaService.testConnection();
+        // if (urlToTest) { // Removed: URL is set globally
+        //      ollamaService.setConfig({ baseUrl: urlToTest });
+        // }
+        const connectionResult = await ollamaService.testConnection(); // Uses global config
         setConnectionStatus(connectionResult.success);
         setConnectionError(connectionResult.error || null);
         setTestConnectionLoading(false);
         
         if (connectionResult.success) {
-            const modelsResult = await ollamaService.fetchModels();
+            const modelsResult = await ollamaService.fetchModels(); // Uses global config
             if (modelsResult.success && modelsResult.models) {
                 setAvailableModels(modelsResult.models);
-                const currentConfig = ollamaService.getConfig(); 
-                setConfig(currentConfig); 
-                if (modelsResult.models.length > 0 && !modelsResult.models.some(m => m.name === currentConfig.modelName)) {
-                     message.info(`Current model unavailable, switched to ${currentConfig.modelName}`);
+                const updatedGlobalConfig = ollamaService.getConfig(); // Get potentially updated model from fetchModels
+                // setConfig(updatedGlobalConfig); // No local config to set
+                if (modelsResult.models.length > 0 && !modelsResult.models.some(m => m.name === updatedGlobalConfig.modelName)) {
+                     message.info(`Current model ${updatedGlobalConfig.modelName} (or previous selection) unavailable or not listed. Defaulting or keeping as is based on fetchModels logic.`);
                 } else if (modelsResult.models.length === 0) {
-                     message.warning("Connected to Ollama, but no models found.");
+                     message.warning("Connected to Ollama, but no models were found.");
                 }
             } else {
                 setConnectionError(modelsResult.error || "Failed to fetch models after successful connection.");
@@ -82,12 +83,10 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({
             setAvailableModels([]); 
         }
         setFetchModelsLoading(false);
-    }, [config.baseUrl]); 
+    }, []); // config.baseUrl removed from dependencies as it's now global
 
-     const handleUrlBlur = () => {
-        handleTestAndFetch(config.baseUrl);
-        ollamaService.setConfig({ baseUrl: config.baseUrl });
-     };
+    // handleUrlBlur removed
+
     const handleGenerate = async () => {
         if (!prompt.trim()) {
             message.error('Please enter a description for the form.');
@@ -97,8 +96,9 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({
              message.error('Cannot generate form. Please ensure connection to Ollama server.');
              return;
         }
-         if (!config.modelName || availableModels.length === 0) {
-             message.error('Cannot generate form. Please select a valid model.');
+        const currentGlobalConfig = ollamaService.getConfig();
+        if (!currentGlobalConfig.modelName || availableModels.length === 0) {
+             message.error('Cannot generate form. Please select a valid model from AI Settings and ensure it is available.');
              return;
         }
 
@@ -153,23 +153,23 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({
             maskClosable={!generationLoading} 
         >
             <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <OllamaSettings
-                    ollamaUrl={config.baseUrl}
-                    onUrlChange={handleUrlChange}
-                    onTestConnection={handleUrlBlur} 
-                    onSaveSettings={() => ollamaService.setConfig(config)} 
-                    loading={testConnectionLoading}
-                />
+                {/* OllamaSettings component removed */}
+                <Typography.Text>
+                    Using Ollama URL: <Typography.Text strong>{ollamaService.getConfig().baseUrl}</Typography.Text>
+                </Typography.Text>
+                <Typography.Text>
+                    AI Settings can be configured in the Dashboard.
+                </Typography.Text>
                 <ModelSelector
-                     model={config.modelName}
+                     model={ollamaService.getConfig().modelName} // Use global config
                      setModel={handleModelChange}
                      availableModels={availableModels}
                      fetchingModels={fetchModelsLoading}
-                     fetchModels={() => handleTestAndFetch()} 
+                     fetchModels={handleTestAndFetch} // Pass directly, no args needed
                      disabled={!connectionStatus} 
                  />
                  <ConnectionStatusDisplay
-                      loading={testConnectionLoading || fetchModelsLoading}
+                      loading={testConnectionLoading || fetchModelsLoading} // Keep this loading state
                       connectionStatus={connectionStatus}
                       error={connectionError}
                       modelCount={availableModels.length}
@@ -180,7 +180,7 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({
                     setPrompt={setPrompt}
                     onGenerate={handleGenerate}
                     loading={generationLoading}
-                    disabled={!connectionStatus || availableModels.length === 0 || generationLoading}
+                    disabled={!connectionStatus || availableModels.length === 0 || generationLoading || !ollamaService.getConfig().modelName} // Check global modelName
                 />
                  {generationError && (
                       <Alert message={`Generation Error: ${generationError}`} type="error" showIcon />

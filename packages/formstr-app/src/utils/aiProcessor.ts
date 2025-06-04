@@ -50,39 +50,36 @@ export function processOllamaFormData(ollamaData: OllamaFormData): ProcessedForm
     for (let i = 0; i < sourceFields.length; i++) {
         const aiField = sourceFields[i];
         const uniqueId = makeTag(6); 
-        const aiFieldType = aiField.type || 'text'; 
+        const aiFieldType = aiField.type; // Prioritize AI provided type
         let label = aiField.label || `Untitled ${uniqueId}`;
-        const labelLower = label.toLowerCase();
+        const labelLower = label.toLowerCase(); // Keep for email validation fallback if needed
         const hasOptions = Array.isArray(aiField.options) && aiField.options.length > 0;
-        const typeMappingLookup = AI_TYPE_TO_INTERNAL_MAP[aiFieldType];
+
+        // Use AI provided type if valid, otherwise default
+        const typeMappingLookup = aiFieldType ? AI_TYPE_TO_INTERNAL_MAP[aiFieldType] : undefined;
         let typeMapping = typeMappingLookup || AI_TYPE_TO_INTERNAL_MAP.default;
+
         let primitiveType = typeMapping.primitive;
         let renderElement = typeMapping.renderElement;
-        const isInitialMappingDefaultOrGeneric = !typeMappingLookup || aiFieldType === 'text' || aiFieldType === 'choice';
-        if (isInitialMappingDefaultOrGeneric) {  
-             if (hasOptions) {
-                 if (labelLower.includes('check all') || labelLower.includes('multiple') || labelLower.includes('select several') || labelLower.includes('checkbox')) {
-                     typeMapping = AI_TYPE_TO_INTERNAL_MAP['Checkbox'];
-                 } else {
-                     typeMapping = AI_TYPE_TO_INTERNAL_MAP['SingleChoice'];
-                 }
-             } else {
-                 if (labelLower.includes('date') || labelLower.includes(' d.o.b') || labelLower.includes('birth')) { typeMapping = AI_TYPE_TO_INTERNAL_MAP['Date']; }
-                 else if (labelLower.includes('time')) { typeMapping = AI_TYPE_TO_INTERNAL_MAP['Time']; }
-                 else if (labelLower.includes('number') || labelLower.includes('rating') || labelLower.includes('quantity') || labelLower.includes('age') || labelLower.includes('numeric')) { typeMapping = AI_TYPE_TO_INTERNAL_MAP['Number']; }
-                 else if (labelLower.includes('email') || labelLower.includes('e-mail')) { typeMapping = AI_TYPE_TO_INTERNAL_MAP['Email']; }
-                 else if (labelLower.includes('comment') || labelLower.includes('feedback') || labelLower.includes('address') || labelLower.includes('paragraph') || labelLower.includes('long text') || labelLower.includes('description') || labelLower.length > 80) { typeMapping = AI_TYPE_TO_INTERNAL_MAP['LongText']; }
-                 else { typeMapping = AI_TYPE_TO_INTERNAL_MAP['ShortText']; }
-             }
-             primitiveType = typeMapping.primitive;
-             renderElement = typeMapping.renderElement;
+
+        // If AI suggested MultipleChoice/Checkbox/Dropdown but didn't provide options,
+        // and the original type was not specific enough, default to ShortText.
+        // This handles cases where AI might say "MultipleChoice" but gives no options.
+        if ((renderElement === AnswerTypes.checkboxes || renderElement === AnswerTypes.radioButton || renderElement === AnswerTypes.dropdown) && !hasOptions) {
+            typeMapping = AI_TYPE_TO_INTERNAL_MAP.default;
+            primitiveType = typeMapping.primitive;
+            renderElement = typeMapping.renderElement;
         }
+
         const config: any = {
             renderElement: renderElement,
             required: aiField.required || false,
             validationRules: {}
         };
-        if (renderElement === AnswerTypes.shortText && (labelLower.includes('email') || labelLower.includes('e-mail') || aiFieldType === 'Email')) {
+
+        // Handle email validation: if AI specified 'Email' type, it maps to shortText with email validation.
+        // Also, keep the label check as a secondary measure if type is not 'Email' but label suggests it.
+        if (renderElement === AnswerTypes.shortText && (aiFieldType === 'Email' || labelLower.includes('email') || labelLower.includes('e-mail'))) {
              config.validationRules.regex = { pattern: EMAIL_REGEX_PATTERN, errorMessage: "Please enter a valid email address." };
         }
         const configJson = JSON.stringify(config);
