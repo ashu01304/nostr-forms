@@ -149,6 +149,9 @@ class OllamaService {
             stream: false,
         };
         try {
+            if (params.tools && params.tools[0] && params.tools[0].function && params.tools[0].function.name === 'create_form_structure') {
+                console.log("DEBUG: AI Form Generation - Input to LLM:", JSON.stringify(chatRequest, null, 2));
+            }
             const response = await this.ollamaInstance.chat(chatRequest as ChatRequest & { stream: false });
             console.log("Raw response from Ollama library:", response);
             const toolCalls = response.message?.tool_calls;
