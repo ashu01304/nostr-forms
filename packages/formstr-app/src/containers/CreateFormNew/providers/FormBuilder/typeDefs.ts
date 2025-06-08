@@ -4,6 +4,12 @@ import { Tag } from "@formstr/sdk/dist/formstr/nip101";
 import { Field } from "../../../../nostr/types";
 import { ProcessedFormData } from "../../../../utils/aiProcessor";
 
+export type RelayStatus = 'connected' | 'pending' | 'error' | 'unknown';
+export interface RelayItem {
+  url: string;
+  tempId: string;
+}
+
 export interface ILocalForm {
   key: string;
   name: string;
@@ -53,8 +59,7 @@ export interface IFormBuilderContext {
   selectedTab: string;
   setSelectedTab: (tab: string) => void;
   bottomElementRef: React.RefObject<HTMLDivElement> | null;
-  relayList: { url: string; tempId: string }[];
-  setRelayList: (list: { url: string; tempId: string }[]) => void;
+  relayList: RelayItem[];
   editList: Set<string> | null;
   setEditList: (keys: Set<string>) => void;
   viewList: Set<string> | null;
@@ -62,4 +67,9 @@ export interface IFormBuilderContext {
   isAiModalOpen: boolean;
   setIsAiModalOpen: (isOpen: boolean) => void;
   handleAIFormGenerated: (processedData: ProcessedFormData) => void;
+  isRelayManagerModalOpen: boolean;
+  toggleRelayManagerModal: () => void;
+  addRelayToList: (url: string) => void;
+  editRelayInList: (tempId: string, newUrl: string) => void;
+  deleteRelayFromList: (tempId: string) => void;
 }

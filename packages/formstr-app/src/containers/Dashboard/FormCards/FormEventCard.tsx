@@ -1,5 +1,5 @@
 import { Tag } from "@formstr/sdk/dist/formstr/nip101";
-import { Button, Card, Divider } from "antd";
+import { Button, Card, Divider, Dropdown, MenuProps } from "antd";
 import { Event } from "nostr-tools";
 import { useNavigate } from "react-router-dom";
 import DeleteFormTrigger from "./DeleteForm";
@@ -7,6 +7,7 @@ import {
   downloadHTMLToDevice,
   makeFormNAddr,
   naddrUrl,
+  makeTag,
 } from "../../../utils/utility";
 import {
   editPath,
@@ -14,9 +15,9 @@ import {
   responsePath,
 } from "../../../utils/formUtils";
 import ReactMarkdown from "react-markdown";
-import { DownloadOutlined, EditOutlined } from "@ant-design/icons";
+import { DownloadOutlined, EditOutlined, MoreOutlined, CopyOutlined } from "@ant-design/icons";
 import { useEffect, useState } from "react";
-import DuplicateForm from "./DuplicateForm";
+import { constructDraftUrl } from "./Drafts";
 
 interface FormEventCardProps {
   event: Event;
@@ -75,32 +76,70 @@ export const FormEventCard: React.FC<FormEventCardProps> = ({
     downloadHTMLToDevice(formFillerUI, name[1]);
   };
 
+  const saveAndOpen = (duplicatedTags: Tag[], newFormId: string) => {
+    const duplicatedForm = {
+      formSpec: duplicatedTags,
+      tempId: newFormId,
+    };
+
+    const existingDrafts = localStorage.getItem("formstr:draftForms");
+    let updatedDrafts = existingDrafts ? JSON.parse(existingDrafts) : [];
+    updatedDrafts = [duplicatedForm, ...updatedDrafts];
+    localStorage.setItem("formstr:draftForms", JSON.stringify(updatedDrafts));
+    window.open(
+      constructDraftUrl(duplicatedForm, window.location.origin),
+      "_blank"
+    );
+  };
+
+  const handleDuplicate = () => {
+    const newFormId = makeTag(6);
+    const duplicatedTags = tags.map((tag) => {
+      if (tag[0] === "d") return ["d", newFormId];
+      if (tag[0] === "settings") {
+        try {
+          const settings = JSON.parse(tag[1]);
+          return [
+            "settings",
+            JSON.stringify({ ...settings, formId: newFormId }),
+          ];
+        } catch {
+          return tag;
+        }
+      }
+      return [...tag];
+    });
+    saveAndOpen(duplicatedTags, newFormId);
+  };
+  const menuItems: MenuProps['items'] = secretKey
+    ? [
+        { key: 'download', label: 'Download', icon: <DownloadOutlined />, onClick: downloadForm },
+        { key: 'edit', label: 'Edit', icon: <EditOutlined />, onClick: () => navigate(editPath(secretKey, formId, relay, viewKey)) },
+        { key: 'duplicate', label: 'Duplicate', icon: <CopyOutlined />, onClick: handleDuplicate },
+      ]
+    : [
+        { key: 'download', label: 'Download', icon: <DownloadOutlined />, onClick: downloadForm },
+      ];
+
   return (
     <Card
       title={name[1] || "Hidden Form"}
       className="form-card"
       extra={
         <div style={{ display: "flex", flexDirection: "row" }}>
-          <DownloadOutlined
-            onClick={downloadForm}
-            style={{
-              color: "purple",
-              marginBottom: 3,
-              marginRight: 14,
-              cursor: "pointer",
-            }}
-          />
-          {secretKey ? (
-            <>
-              <EditOutlined
-                style={{ color: "purple", marginBottom: 3, marginRight: 14 }}
-                onClick={() =>
-                  navigate(editPath(secretKey, formId, relay, viewKey))
-                }
-              />
-              <DuplicateForm tags={tags} />
-            </>
-          ) : null}
+          <Dropdown
+            menu={{ items: menuItems }}
+            trigger={['click']}
+            placement="bottomRight"
+          >
+            <Button
+              type="text"
+              style={{ color: "purple", marginRight: 4, cursor: "pointer" }}
+              aria-label="Quick actions"
+            >
+              <MoreOutlined />
+            </Button>
+          </Dropdown>
           {onDeleted ? (
             <DeleteFormTrigger formKey={formKey} onDeleted={onDeleted} />
           ) : null}

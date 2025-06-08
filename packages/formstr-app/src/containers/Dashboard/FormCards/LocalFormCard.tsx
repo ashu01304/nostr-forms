@@ -1,10 +1,10 @@
-import { Button, Card, Typography } from "antd";
+import { Button, Card, Typography, Dropdown, MenuProps } from "antd";
 import { ILocalForm } from "../../CreateFormNew/providers/FormBuilder/typeDefs";
 import { useNavigate } from "react-router-dom";
 import DeleteFormTrigger from "./DeleteForm";
 import { naddrUrl } from "../../../utils/utility";
 import { editPath, responsePath } from "../../../utils/formUtils";
-import EditOutlined from "@ant-design/icons/lib/icons/EditOutlined";
+import { EditOutlined, MoreOutlined } from "@ant-design/icons";
 
 interface LocalFormCardProps {
   form: ILocalForm;
@@ -24,20 +24,29 @@ export const LocalFormCard: React.FC<LocalFormCardProps> = ({
     form.publicKey && form.formId
       ? naddrUrl(form.publicKey, form.formId, [form.relay], form.viewKey)
       : `/fill/${form.publicKey}`;
+  const menuItems: MenuProps['items'] = [
+    { key: 'edit', label: 'Edit', icon: <EditOutlined />, onClick: () => navigate(editPath(form.privateKey, form.formId, form.relay, form.viewKey)) },
+  ];
+
   return (
     <Card
       title={form.name}
       className="form-card"
       extra={
         <div>
-          <EditOutlined
-            style={{ color: "purple", marginBottom: 3 }}
-            onClick={() =>
-              navigate(
-                editPath(form.privateKey, form.formId, form.relay, form.viewKey)
-              )
-            }
-          />
+          <Dropdown
+            menu={{ items: menuItems }}
+            trigger={['click']}
+            placement="bottomRight"
+          >
+            <Button
+              type="text"
+              style={{ color: "purple", marginRight: 14, cursor: "pointer" }}
+              aria-label="Quick actions"
+            >
+              <MoreOutlined />
+            </Button>
+          </Dropdown>
           <DeleteFormTrigger formKey={form.key} onDeleted={onDeleted} />
         </div>
       }

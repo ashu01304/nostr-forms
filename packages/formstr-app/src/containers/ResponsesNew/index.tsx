@@ -92,12 +92,9 @@ export const Response = () => {
       setIsFormSpecLoading(true);
       return;
     }
-    console.log("Hook 1: Initializing form template fetch");
     initialize();
     return () => {
-      console.log("Hook 1: Cleanup");
       if (responseCloser) {
-        console.log("Hook 1: Closing responseCloser in cleanup");
         responseCloser.close();
         setResponsesCloser(null);
       }
@@ -107,7 +104,6 @@ export const Response = () => {
     if (!formEvent || !formId || !poolRef.current) { 
       return;
     }
-    console.log("Hook 2: formEvent available, fetching responses for", formEvent.id);
     let allowedPubkeys;
     let pubkeys = getAllowedUsers(formEvent);
     if (pubkeys.length !== 0) allowedPubkeys = pubkeys;
@@ -123,7 +119,6 @@ export const Response = () => {
     setResponsesCloser(newCloser);
 
     return () => {
-      console.log("Hook 2: Cleanup, closing subscription for formEvent", formEvent.id);
       newCloser.close();
     };
   }, [formEvent, formId, poolRef.current]);
