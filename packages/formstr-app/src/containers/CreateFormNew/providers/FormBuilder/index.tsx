@@ -324,6 +324,12 @@ export default function FormBuilderProvider({
     );
     settingsFromFile = { ...InitialFormSettings, ...settingsFromFile };
     let fields = form.spec.filter((f) => f[0] === "field") as Field[];
+  const viewListFromSpec = form.spec
+    .filter((f) => f[0] === "viewList")
+    .flatMap((f) => f.slice(1));
+  const editListFromSpec = form.spec
+    .filter((f) => f[0] === "editList")
+    .flatMap((f) => f.slice(1));
       setFormSettings((prev) => ({ ...prev, ...settingsFromFile, formId: form.id }));
       setViewList(new Set(viewListFromSpec));
       setEditList(new Set(editListFromSpec));
