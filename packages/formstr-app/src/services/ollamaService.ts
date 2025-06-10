@@ -1,4 +1,6 @@
 import { getItem, setItem, LOCAL_STORAGE_KEYS } from '../utils/localStorage';
+
+// The ID of your Chrome Extension
 const EXTENSION_ID = "djmliheoabooicndndcbgblcpcobjcbc"; 
 
 export interface OllamaConfig {
@@ -21,7 +23,9 @@ export interface OllamaModel {
 }
 export interface GenerateFormParams {
     prompt: string;
-    systemPrompt?: string;
+    // systemPrompt and tools are no longer used directly in the API call,
+    // but we keep them for function signature consistency.
+    systemPrompt?: string; 
     tools?: any[];
 }
 export interface GenerateFormResult {
@@ -114,17 +118,52 @@ class OllamaService {
     }
 
     async generateForm(params: GenerateFormParams): Promise<GenerateFormResult> {
-        const systemPrompt = (params.systemPrompt || '') + "\n\nYou must use the 'create_form' tool to generate the form based on the user's prompt.";
+        // CHANGED: Using a single, comprehensive prompt as requested.
+        // This includes all instructions and the schema directly.
+        const fullPrompt = `You are an expert JSON generator. Based on the user's request, create a form structure.
+        
+Here is the required JSON schema for the form:
+{
+    "type": "object",
+    "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "fields": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "type": { "type": "string", "enum": ["ShortText", "LongText", "Email", "Number", "MultipleChoice", "SingleChoice", "Checkbox", "Dropdown", "Date", "Time", "Label"] },
+                    "label": { "type": "string" },
+                    "required": { "type": "boolean" },
+                    "options": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["type", "label"]
+            }
+        }
+    },
+    "required": ["title", "fields"]
+}
+
+CRITICAL RULES:
+- Your response MUST be ONLY the JSON object that validates against the schema above.
+- Do NOT include any extra text, explanations, or markdown formatting like \`\`\`json.
+- For choice-based fields ('MultipleChoice', 'SingleChoice', 'Checkbox', 'Dropdown'), you MUST include the 'options' property.
+
+USER REQUEST: "${params.prompt}"
+
+YOUR JSON RESPONSE:
+`;
 
         const body = {
             model: this.config.modelName,
-            prompt: params.prompt,
-            system: systemPrompt,
-            tools: params.tools,
+            prompt: fullPrompt, // Using the new combined prompt
             stream: false,
+            format: 'json', // Re-enabling this as we expect a raw JSON string now
         };
 
-        const response = await this._request('/api/chat', {
+        // Note: The endpoint is now /api/generate, which is simpler for this kind of request.
+        const response = await this._request('/api/generate', {
             method: 'POST',
             body: JSON.stringify(body),
         });
@@ -138,17 +177,12 @@ class OllamaService {
         }
 
         try {
-            const toolCall = response.data?.message?.tool_calls?.[0];
-            if (toolCall && toolCall.function && toolCall.function.arguments) {
-                console.log("Formstr: Successfully found and parsed tool call in response.");
-                return { success: true, data: toolCall.function.arguments };
-            }
-            
-            console.error('Formstr: Ollama response did not include a tool call.', response.data);
-            return { success: false, error: 'Ollama did not use the required tool. The model might not support tool calling or the prompt was ambiguous.' };
-
+            // CHANGED: Parsing the JSON directly from the 'response' field of the /api/generate output.
+            const responseData = JSON.parse(response.data.response);
+            console.log("Formstr: Successfully parsed JSON from model response content.");
+            return { success: true, data: responseData };
         } catch (e) {
-            console.error('Formstr: Error parsing response from Ollama', e);
+            console.error('Formstr: Error parsing JSON content from Ollama', e, "Raw Content:", response.data.response);
             return { success: false, error: 'Failed to parse form structure from Ollama.' };
         }
     }

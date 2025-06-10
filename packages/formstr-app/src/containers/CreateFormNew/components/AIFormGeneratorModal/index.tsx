@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal, Divider, message, Space, Alert, Typography, Button } from 'antd';
+import { Modal, Divider, message, Button, Typography } from 'antd';
 import { ollamaService, OllamaModel, OllamaConfig } from '../../../../services/ollamaService'; 
 import { processOllamaFormData, ProcessedFormData } from '../../../../utils/aiProcessor'; 
-import { CREATE_FORM_TOOL_SCHEMA, CREATE_FORM_SYSTEM_PROMPT } from '../../../../constants/prompts'; 
 import { AIFormGeneratorModalProps } from './types';
 import OllamaSettings from './OllamaSettings';
 import ModelSelector from './ModelSelector';
@@ -78,6 +77,9 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
         setConfig(updatedConfig);
         ollamaService.setConfig(updatedConfig);
     };
+    const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        handleConfigChange({ baseUrl: e.target.value });
+    };
 
     const handleModelChange = (newModel: string) => {
         handleConfigChange({ modelName: newModel });
@@ -91,11 +93,7 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
         setGenerating(true);
         setError(null);
         try {
-            const result = await ollamaService.generateForm({
-                prompt: prompt,
-                systemPrompt: CREATE_FORM_SYSTEM_PROMPT,
-                tools: [CREATE_FORM_TOOL_SCHEMA],
-            });
+            const result = await ollamaService.generateForm({ prompt });
             if (result.success && result.data) {
                 const processedData = processOllamaFormData(result.data);
                 onFormGenerated(processedData);
@@ -121,9 +119,17 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
             width={800}
         >
             <Typography.Text type="secondary">
-                Powered by your local Ollama instance. Ensure Ollama is running.
+                Powered by your local Ollama instance via the Formstr Companion extension.
             </Typography.Text>
             <Divider />
+
+            <OllamaSettings
+                ollamaUrl={config.baseUrl}
+                onUrlChange={handleUrlChange}
+                onTestConnection={testConnection}
+                loading={loading}
+            />
+
             <ConnectionStatusDisplay
                 loading={loading}
                 connectionStatus={connectionStatus}
