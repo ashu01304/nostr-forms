@@ -1,6 +1,4 @@
 import { getItem, setItem, LOCAL_STORAGE_KEYS } from '../utils/localStorage';
-
-// The ID of your Chrome Extension
 const EXTENSION_ID = "djmliheoabooicndndcbgblcpcobjcbc"; 
 
 export interface OllamaConfig {
@@ -23,8 +21,6 @@ export interface OllamaModel {
 }
 export interface GenerateFormParams {
     prompt: string;
-    // systemPrompt and tools are no longer used directly in the API call,
-    // but we keep them for function signature consistency.
     systemPrompt?: string; 
     tools?: any[];
 }
@@ -118,8 +114,6 @@ class OllamaService {
     }
 
     async generateForm(params: GenerateFormParams): Promise<GenerateFormResult> {
-        // CHANGED: Using a single, comprehensive prompt as requested.
-        // This includes all instructions and the schema directly.
         const fullPrompt = `You are an expert JSON generator. Based on the user's request, create a form structure.
         
 Here is the required JSON schema for the form:
@@ -157,12 +151,11 @@ YOUR JSON RESPONSE:
 
         const body = {
             model: this.config.modelName,
-            prompt: fullPrompt, // Using the new combined prompt
+            prompt: fullPrompt,
             stream: false,
-            format: 'json', // Re-enabling this as we expect a raw JSON string now
+            format: 'json',
         };
 
-        // Note: The endpoint is now /api/generate, which is simpler for this kind of request.
         const response = await this._request('/api/generate', {
             method: 'POST',
             body: JSON.stringify(body),
@@ -177,7 +170,6 @@ YOUR JSON RESPONSE:
         }
 
         try {
-            // CHANGED: Parsing the JSON directly from the 'response' field of the /api/generate output.
             const responseData = JSON.parse(response.data.response);
             console.log("Formstr: Successfully parsed JSON from model response content.");
             return { success: true, data: responseData };
