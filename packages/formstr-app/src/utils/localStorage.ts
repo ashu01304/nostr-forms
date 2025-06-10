@@ -7,6 +7,7 @@ export const LOCAL_STORAGE_KEYS = {
   PROFILE: "formstr:profile",
   OLLAMA_URL: "formstr:ollamaUrl",
   OLLAMA_MODEL: "formstr:ollamaModel",
+  OLLAMA_CONFIG: "ollama_config",
 };
 
 export function getItem<T>(key: string, { parseAsJson = true } = {}): T | null {

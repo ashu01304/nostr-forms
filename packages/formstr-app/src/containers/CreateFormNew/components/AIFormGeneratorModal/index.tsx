@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal, Divider, message, Space, Alert, Typography } from 'antd';
+import { Modal, Divider, message, Space, Alert, Typography, Button } from 'antd';
 import { ollamaService, OllamaModel, OllamaConfig } from '../../../../services/ollamaService'; 
 import { processOllamaFormData, ProcessedFormData } from '../../../../utils/aiProcessor'; 
 import { CREATE_FORM_TOOL_SCHEMA, CREATE_FORM_SYSTEM_PROMPT } from '../../../../constants/prompts'; 
@@ -9,183 +9,143 @@ import ModelSelector from './ModelSelector';
 import GenerationPanel from './GenerationPanel';
 import ConnectionStatusDisplay from './ConnectionStatusDisplay'; 
 
-const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({
-    isOpen,
-    onClose,
-    onFormGenerated,
-}) => {
-    const [config, setConfig] = useState<OllamaConfig>(ollamaService.getConfig());
-    const [availableModels, setAvailableModels] = useState<OllamaModel[]>([]);
-    const [connectionStatus, setConnectionStatus] = useState<boolean | null>(null);
-    const [connectionError, setConnectionError] = useState<string | null>(null);
-    const [fetchModelsLoading, setFetchModelsLoading] = useState<boolean>(false);
-    const [testConnectionLoading, setTestConnectionLoading] = useState<boolean>(false);
+const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onClose,onFormGenerated}) => {
     const [prompt, setPrompt] = useState<string>('');
-    const [generationLoading, setGenerationLoading] = useState<boolean>(false);
-    const [generationError, setGenerationError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [generating, setGenerating] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState<boolean | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [availableModels, setAvailableModels] = useState<OllamaModel[]>([]);
+    const [fetchingModels, setFetchingModels] = useState(false);
+    const [config, setConfig] = useState<OllamaConfig>(ollamaService.getConfig());
+
+
+    const testConnection = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        setConnectionStatus(null);
+        console.log("Formstr: Testing Ollama connection...");
+        const result = await ollamaService.testConnection();
+        setLoading(false);
+        if (result.success) {
+            message.success('Successfully connected to Ollama!');
+            setConnectionStatus(true);
+            fetchModels();
+        } else {
+            setConnectionStatus(false);
+            setError(result.error || 'Failed to connect.');
+            console.error("Formstr: Connection test failed.", result.error);
+            if (result.error === 'EXTENSION_NOT_FOUND') {
+                message.error(
+                    <>
+                        Ollama extension not found. Please install our companion extension for a seamless experience.
+                        <Button
+                            type="link"
+                            href="https://chromewebstore.google.com/" 
+                            target="_blank"
+                        >
+                            Install Now
+                        </Button>
+                    </>,
+                    10 
+                );
+            } else {
+                message.error(`Connection failed: ${result.error}`);
+            }
+        }
+    }, []);
+
+    const fetchModels = useCallback(async () => {
+        setFetchingModels(true);
+        const result = await ollamaService.fetchModels();
+        if (result.success && result.models) {
+            setAvailableModels(result.models);
+        } else {
+            message.error(result.error || 'Failed to fetch models.');
+        }
+        setFetchingModels(false);
+    }, []);
 
     useEffect(() => {
         if (isOpen) {
-            const currentConfig = ollamaService.getConfig();
-            setConfig(currentConfig);
-            setConnectionStatus(null);
-            setConnectionError(null);
-            setAvailableModels([]); 
-            setGenerationError(null);
-            handleTestAndFetch();
+            testConnection();
         }
-    }, [isOpen]);
+    }, [isOpen, testConnection]);
 
-    const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setConfig(prev => ({ ...prev, baseUrl: e.target.value }));
-        setConnectionStatus(null);
-        setConnectionError(null);
+
+    const handleConfigChange = (newConfig: Partial<OllamaConfig>) => {
+        const updatedConfig = { ...config, ...newConfig };
+        setConfig(updatedConfig);
+        ollamaService.setConfig(updatedConfig);
     };
 
     const handleModelChange = (newModel: string) => {
-        setConfig(prev => ({ ...prev, modelName: newModel }));
-        ollamaService.setConfig({ modelName: newModel }); 
+        handleConfigChange({ modelName: newModel });
     };
 
-    const handleTestAndFetch = useCallback(async (urlToTest?: string) => {
-        const effectiveUrl = urlToTest ?? config.baseUrl; 
-        console.log(`Testing and fetching for URL: ${effectiveUrl}`);
-        setTestConnectionLoading(true);
-        setFetchModelsLoading(true); 
-        setConnectionStatus(null);
-        setConnectionError(null);
-        setAvailableModels([]);
-        if (urlToTest) {
-             ollamaService.setConfig({ baseUrl: urlToTest });
-        }
-        const connectionResult = await ollamaService.testConnection();
-        setConnectionStatus(connectionResult.success);
-        setConnectionError(connectionResult.error || null);
-        setTestConnectionLoading(false);
-        
-        if (connectionResult.success) {
-            const modelsResult = await ollamaService.fetchModels();
-            if (modelsResult.success && modelsResult.models) {
-                setAvailableModels(modelsResult.models);
-                const currentConfig = ollamaService.getConfig(); 
-                setConfig(currentConfig); 
-                if (modelsResult.models.length > 0 && !modelsResult.models.some(m => m.name === currentConfig.modelName)) {
-                     message.info(`Current model unavailable, switched to ${currentConfig.modelName}`);
-                } else if (modelsResult.models.length === 0) {
-                     message.warning("Connected to Ollama, but no models found.");
-                }
-            } else {
-                setConnectionError(modelsResult.error || "Failed to fetch models after successful connection.");
-                setAvailableModels([]); 
-            }
-        } else {
-            setAvailableModels([]); 
-        }
-        setFetchModelsLoading(false);
-    }, [config.baseUrl]); 
-
-     const handleUrlBlur = () => {
-        handleTestAndFetch(config.baseUrl);
-        ollamaService.setConfig({ baseUrl: config.baseUrl });
-     };
     const handleGenerate = async () => {
         if (!prompt.trim()) {
             message.error('Please enter a description for the form.');
             return;
         }
-        if (!connectionStatus) {
-             message.error('Cannot generate form. Please ensure connection to Ollama server.');
-             return;
-        }
-         if (!config.modelName || availableModels.length === 0) {
-             message.error('Cannot generate form. Please select a valid model.');
-             return;
-        }
-
-        setGenerationLoading(true);
-        setGenerationError(null);
-        const generationParams = {
-            prompt: prompt,
-            systemPrompt: CREATE_FORM_SYSTEM_PROMPT, 
-            tools: [
-                {
-                    type: 'function' as const,
-                    function: {
-                        name: 'create_form_structure',
-                        description: 'Generates the JSON structure for a web form based on a description.',
-                        parameters: CREATE_FORM_TOOL_SCHEMA, 
-                    },
-                }
-            ]
-        };
-
-        const result = await ollamaService.generateForm(generationParams);
-        if (result.success && result.data) {
-            try {
+        setGenerating(true);
+        setError(null);
+        try {
+            const result = await ollamaService.generateForm({
+                prompt: prompt,
+                systemPrompt: CREATE_FORM_SYSTEM_PROMPT,
+                tools: [CREATE_FORM_TOOL_SCHEMA],
+            });
+            if (result.success && result.data) {
                 const processedData = processOllamaFormData(result.data);
-                onFormGenerated(processedData); 
+                onFormGenerated(processedData);
                 message.success('Form generated successfully!');
-                onClose(); 
-            } catch (processingError: any) {
-                 console.error("Error processing AI response:", processingError);
-                 setGenerationError(`Failed to process AI response: ${processingError.message}`);
-                 message.error('Failed to process the generated form data.');
+                onClose();
+            } else {
+                setError(result.error || 'Failed to generate form.');
+                message.error(result.error || 'An unexpected error occurred during generation.');
             }
-        } else {
-            setGenerationError(result.error || 'An unknown error occurred during generation.');
-            message.error(result.error || 'Failed to generate form.');
+        } catch (err: any) {
+            setError(err.message || 'An unknown error occurred.');
+            message.error(err.message || 'An unknown error occurred.');
+        } finally {
+            setGenerating(false);
         }
-        setGenerationLoading(false);
     };
-
     return (
         <Modal
-            title={
-                <Typography.Title level={4} style={{ textAlign: 'center', margin: 0 }}>
-                    Create Form with AI
-                </Typography.Title>
-            }
+            title="AI Form Generator"
             open={isOpen}
             onCancel={onClose}
             footer={null} 
-            width={700}
-            destroyOnClose 
-            maskClosable={!generationLoading} 
+            width={800}
         >
-            <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <OllamaSettings
-                    ollamaUrl={config.baseUrl}
-                    onUrlChange={handleUrlChange}
-                    onTestConnection={handleUrlBlur} 
-                    onSaveSettings={() => ollamaService.setConfig(config)} 
-                    loading={testConnectionLoading}
+            <Typography.Text type="secondary">
+                Powered by your local Ollama instance. Ensure Ollama is running.
+            </Typography.Text>
+            <Divider />
+            <ConnectionStatusDisplay
+                loading={loading}
+                connectionStatus={connectionStatus}
+                error={error}
+                modelCount={availableModels.length}
                 />
                 <ModelSelector
                      model={config.modelName}
                      setModel={handleModelChange}
                      availableModels={availableModels}
-                     fetchingModels={fetchModelsLoading}
-                     fetchModels={() => handleTestAndFetch()} 
-                     disabled={!connectionStatus} 
+                     fetchingModels={fetchingModels}
+                     fetchModels={fetchModels}
+                     disabled={!connectionStatus}
                  />
-                 <ConnectionStatusDisplay
-                      loading={testConnectionLoading || fetchModelsLoading}
-                      connectionStatus={connectionStatus}
-                      error={connectionError}
-                      modelCount={availableModels.length}
-                 />
-                <Divider style={{ margin: '0' }}/>
+                <Divider />
                 <GenerationPanel
                     prompt={prompt}
                     setPrompt={setPrompt}
                     onGenerate={handleGenerate}
-                    loading={generationLoading}
-                    disabled={!connectionStatus || availableModels.length === 0 || generationLoading}
+                    loading={generating}
+                    disabled={!connectionStatus || availableModels.length === 0}
                 />
-                 {generationError && (
-                      <Alert message={`Generation Error: ${generationError}`} type="error" showIcon />
-                 )}
-            </Space>
         </Modal>
     );
 };
