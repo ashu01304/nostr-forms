@@ -1,10 +1,12 @@
 import { getItem, setItem, LOCAL_STORAGE_KEYS } from '../utils/localStorage';
-const EXTENSION_ID ="nopcdaggijpnmjppjojpeoelfdjodkjd";
+
+const EXTENSION_ID = "nopcdaggijpnmjppjojpeoelfdjodkjd";
 
 export interface OllamaConfig {
     baseUrl: string;
     modelName: string;
 }
+
 export interface OllamaModel {
     name: string;
     modified_at: Date;
@@ -19,31 +21,32 @@ export interface OllamaModel {
         quantization_level: string;
     };
 }
-export interface GenerateFormParams {
+
+export interface GenerateParams {
     prompt: string;
-    systemPrompt?: string; 
-    tools?: any[];
+    system?: string;
+    format?: 'json';
 }
-export interface GenerateFormResult {
+
+export interface GenerateResult {
     success: boolean;
     data?: any;
     error?: string;
-    rawResponse?: string;
 }
+
 export interface TestConnectionResult {
     success: boolean;
     error?: string;
 }
+
 export interface FetchModelsResult {
     success: boolean;
     models?: OllamaModel[];
     error?: string;
 }
 
-
 class OllamaService {
     private config: OllamaConfig;
-
     constructor() {
         this.config = this.getConfig();
         console.log("Formstr: OllamaService initialized.");
@@ -62,7 +65,6 @@ class OllamaService {
 
     private async _request(endpoint: string, options: RequestInit): Promise<any> {
         console.log(`Formstr: Attempting request to Ollama endpoint: ${endpoint} via extension.`);
-
         if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
             console.warn("Formstr: Chrome extension runtime not available.");
             return { success: false, error: 'EXTENSION_NOT_FOUND' };
@@ -81,6 +83,7 @@ class OllamaService {
                     },
                 },
                 (response) => {
+                    console.log('Formstr AI Response Received:', response);
                     if (chrome.runtime.lastError) {
                         console.error("Formstr: Extension communication error:", chrome.runtime.lastError.message);
                         resolve({ success: false, error: "EXTENSION_NOT_FOUND" });
@@ -100,7 +103,7 @@ class OllamaService {
         }
         return { success: response.success, error: response.error };
     }
-    
+
     async fetchModels(): Promise<FetchModelsResult> {
         const response = await this._request('/api/tags', { method: 'GET' });
         if (response.error === 'EXTENSION_NOT_FOUND') {
@@ -113,70 +116,32 @@ class OllamaService {
         };
     }
 
-    async generateForm(params: GenerateFormParams): Promise<GenerateFormResult> {
-        const fullPrompt = `You are an expert JSON generator. Based on the user's request, create a form structure.
-        
-Here is the required JSON schema for the form:
-{
-    "type": "object",
-    "properties": {
-        "title": { "type": "string" },
-        "description": { "type": "string" },
-        "fields": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "type": { "type": "string", "enum": ["ShortText", "LongText", "Email", "Number", "MultipleChoice", "SingleChoice", "Checkbox", "Dropdown", "Date", "Time", "Label"] },
-                    "label": { "type": "string" },
-                    "required": { "type": "boolean" },
-                    "options": { "type": "array", "items": { "type": "string" } }
-                },
-                "required": ["type", "label"]
-            }
-        }
-    },
-    "required": ["title", "fields"]
-}
-
-CRITICAL RULES:
-- Your response MUST be ONLY the JSON object that validates against the schema above.
-- Do NOT include any extra text, explanations, or markdown formatting like \`\`\`json.
-- For choice-based fields ('MultipleChoice', 'SingleChoice', 'Checkbox', 'Dropdown'), you MUST include the 'options' property.
-
-USER REQUEST: "${params.prompt}"
-
-YOUR JSON RESPONSE:
-`;
-
-        const body = {
+    async generate(params: GenerateParams): Promise<GenerateResult> {
+        const body: any = {
             model: this.config.modelName,
-            prompt: fullPrompt,
+            prompt: params.prompt,
             stream: false,
-            format: 'json',
         };
 
+        if (params.system) {
+            body.system = params.system;
+        }
+        if (params.format) {
+            body.format = params.format;
+        }
+        
+        console.log('Formstr AI Request Sent:', { model: this.config.modelName, ...body });
+        
         const response = await this._request('/api/generate', {
             method: 'POST',
             body: JSON.stringify(body),
         });
-
-        if (response.error === 'EXTENSION_NOT_FOUND') {
-            return response;
-        }
         
-        if (!response.success) {
-            return { success: false, error: response.error };
-        }
-
-        try {
-            const responseData = JSON.parse(response.data.response);
-            console.log("Formstr: Successfully parsed JSON from model response content.");
-            return { success: true, data: responseData };
-        } catch (e) {
-            console.error('Formstr: Error parsing JSON content from Ollama', e, "Raw Content:", response.data.response);
-            return { success: false, error: 'Failed to parse form structure from Ollama.' };
-        }
+        return {
+            success: response.success,
+            data: response.data,
+            error: response.error,
+        };
     }
 }
 

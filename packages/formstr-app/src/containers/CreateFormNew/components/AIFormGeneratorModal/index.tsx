@@ -1,12 +1,40 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Modal, Divider, message, Button, Typography } from 'antd';
 import { ollamaService, OllamaModel, OllamaConfig } from '../../../../services/ollamaService';
-import { processOllamaFormData, ProcessedFormData } from '../../../../utils/aiProcessor';
+import { processOllamaFormData } from '../../../../utils/aiProcessor';
 import { AIFormGeneratorModalProps } from './types';
 import OllamaSettings from './OllamaSettings';
 import ModelSelector from './ModelSelector';
 import GenerationPanel from './GenerationPanel';
 import ConnectionStatusDisplay from './ConnectionStatusDisplay';
+
+const FORM_GENERATION_SYSTEM_PROMPT = `You are an expert JSON generator. Based on the user's request, create a form structure.
+Here is the required JSON schema for the form:
+{
+    "type": "object",
+    "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "fields": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "type": { "type": "string", "enum": ["ShortText", "LongText", "Email", "Number", "MultipleChoice", "SingleChoice", "Checkbox", "Dropdown", "Date", "Time", "Label"] },
+                    "label": { "type": "string" },
+                    "required": { "type": "boolean" },
+                    "options": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["type", "label"]
+            }
+        }
+    },
+    "required": ["title", "fields"]
+}
+CRITICAL RULES:
+- Your response MUST be ONLY the JSON object that validates against the schema above.
+- Do NOT include any extra text, explanations, or markdown formatting like \`\`\`json.
+`;
 
 const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onClose,onFormGenerated}) => {
     const [prompt, setPrompt] = useState<string>('');
@@ -88,9 +116,14 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
         setGenerating(true);
         setError(null);
         try {
-            const result = await ollamaService.generateForm({ prompt });
-            if (result.success && result.data) {
-                const processedData = processOllamaFormData(result.data);
+            const result = await ollamaService.generate({
+              prompt: `USER REQUEST: "${prompt}"\nYOUR JSON RESPONSE:`,
+              system: FORM_GENERATION_SYSTEM_PROMPT,
+              format: "json",
+            });
+            
+            if (result.success && result.data?.response) {
+                const processedData = processOllamaFormData(JSON.parse(result.data.response));
                 onFormGenerated(processedData);
                 message.success('Form generated successfully!');
                 onClose();
