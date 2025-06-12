@@ -1,40 +1,26 @@
 import React from 'react';
-import { Input, Space, Typography, Tooltip, Collapse, Row, Col, Divider as AntDivider, Button } from 'antd';
-import { QuestionCircleOutlined } from '@ant-design/icons';
+import { Typography, Collapse, Button } from 'antd';
 import { OllamaSettingsProps } from './types';
 
 const { Panel } = Collapse;
-const EXTENSION_ID = "djmliheoabooicndndcbgblcpcobjcbc";
+const EXTENSION_ID = "nopcdaggijpnmjppjojpeoelfdjodkjd";
 
 const OllamaSettings: React.FC<OllamaSettingsProps> = ({
-    ollamaUrl,
-    onUrlChange,
     onTestConnection,
     loading
 }) => {
     return (
         <div style={{ marginBottom: '20px' }}>
-            <Space direction="vertical" style={{ width: '100%' }}>
-                <Typography.Text>Ollama Server URL</Typography.Text>
-                <Space.Compact style={{ width: '100%' }}>
-                <Input
-                    value={ollamaUrl}
-                    onChange={onUrlChange}
-                    placeholder="http://localhost:11434"
-                />
-                <Button onClick={onTestConnection} loading={loading}>
-                    Test Connection
-                </Button>
-                </Space.Compact>
-            </Space>
-
+            <Button onClick={onTestConnection} loading={loading} style={{ width: '100%' }}>
+                Test Connection to Ollama Extension
+            </Button>
             <Collapse ghost style={{ marginTop: '16px' }}>
                 <Panel header="Connection Help & Instructions" key="1">
                 <Typography.Paragraph>
-                    For the Formstr extension to communicate with your local Ollama instance, you must configure Ollama to accept requests from the extension's origin.
+                    The Formstr Companion extension handles the connection to your Ollama instance. You can set the Ollama server URL in the extension's popup.
                 </Typography.Paragraph>
                 <Typography.Paragraph>
-                    You can do this by setting the <Typography.Text code>OLLAMA_ORIGINS</Typography.Text> environment variable.
+                    For the extension to communicate with your local Ollama instance, you must configure Ollama to accept requests from the extension's origin.
                 </Typography.Paragraph>
 
                 <Typography.Title level={5}>macOS / Linux</Typography.Title>

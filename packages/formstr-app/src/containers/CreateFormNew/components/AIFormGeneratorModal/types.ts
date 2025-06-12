@@ -11,10 +11,7 @@ export interface FormTypeOption {
     label: string;
 }
 export interface OllamaSettingsProps {
-    ollamaUrl: string;
-    onUrlChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onTestConnection: () => void;
-    onSaveSettings?: () => void;
     loading: boolean;
 }
 export interface ModelSelectorProps {

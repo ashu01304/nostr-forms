@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Modal, Divider, message, Button, Typography } from 'antd';
-import { ollamaService, OllamaModel, OllamaConfig } from '../../../../services/ollamaService'; 
-import { processOllamaFormData, ProcessedFormData } from '../../../../utils/aiProcessor'; 
+import { ollamaService, OllamaModel, OllamaConfig } from '../../../../services/ollamaService';
+import { processOllamaFormData, ProcessedFormData } from '../../../../utils/aiProcessor';
 import { AIFormGeneratorModalProps } from './types';
 import OllamaSettings from './OllamaSettings';
 import ModelSelector from './ModelSelector';
 import GenerationPanel from './GenerationPanel';
-import ConnectionStatusDisplay from './ConnectionStatusDisplay'; 
+import ConnectionStatusDisplay from './ConnectionStatusDisplay';
 
 const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onClose,onFormGenerated}) => {
     const [prompt, setPrompt] = useState<string>('');
@@ -17,7 +17,6 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
     const [availableModels, setAvailableModels] = useState<OllamaModel[]>([]);
     const [fetchingModels, setFetchingModels] = useState(false);
     const [config, setConfig] = useState<OllamaConfig>(ollamaService.getConfig());
-
 
     const testConnection = useCallback(async () => {
         setLoading(true);
@@ -40,13 +39,13 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
                         Ollama extension not found. Please install our companion extension for a seamless experience.
                         <Button
                             type="link"
-                            href="https://chromewebstore.google.com/" 
+                            href="https://chromewebstore.google.com/"
                             target="_blank"
                         >
                             Install Now
                         </Button>
                     </>,
-                    10 
+                    10
                 );
             } else {
                 message.error(`Connection failed: ${result.error}`);
@@ -71,14 +70,10 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
         }
     }, [isOpen, testConnection]);
 
-
     const handleConfigChange = (newConfig: Partial<OllamaConfig>) => {
         const updatedConfig = { ...config, ...newConfig };
         setConfig(updatedConfig);
         ollamaService.setConfig(updatedConfig);
-    };
-    const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        handleConfigChange({ baseUrl: e.target.value });
     };
 
     const handleModelChange = (newModel: string) => {
@@ -110,26 +105,23 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
             setGenerating(false);
         }
     };
+
     return (
         <Modal
             title="AI Form Generator"
             open={isOpen}
             onCancel={onClose}
-            footer={null} 
+            footer={null}
             width={800}
         >
             <Typography.Text type="secondary">
                 Powered by your local Ollama instance via the Formstr Companion extension.
             </Typography.Text>
             <Divider />
-
             <OllamaSettings
-                ollamaUrl={config.baseUrl}
-                onUrlChange={handleUrlChange}
                 onTestConnection={testConnection}
                 loading={loading}
             />
-
             <ConnectionStatusDisplay
                 loading={loading}
                 connectionStatus={connectionStatus}

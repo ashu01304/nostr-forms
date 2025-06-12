@@ -1,5 +1,5 @@
 import { getItem, setItem, LOCAL_STORAGE_KEYS } from '../utils/localStorage';
-const EXTENSION_ID = "djmliheoabooicndndcbgblcpcobjcbc"; 
+const EXTENSION_ID ="nopcdaggijpnmjppjojpeoelfdjodkjd";
 
 export interface OllamaConfig {
     baseUrl: string;
