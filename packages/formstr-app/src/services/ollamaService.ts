@@ -1,47 +1,11 @@
 import { getItem, setItem, LOCAL_STORAGE_KEYS } from '../utils/localStorage';
 
-export interface OllamaConfig {
-    baseUrl: string;
-    modelName: string;
-}
-
-export interface OllamaModel {
-    name: string;
-    modified_at: Date;
-    size: number;
-    digest: string;
-    details: {
-        parent_model: string;
-        format: string;
-        family: string;
-        families: string[] | null;
-        parameter_size: string;
-        quantization_level: string;
-    };
-}
-
-export interface GenerateParams {
-    prompt: string;
-    system?: string;
-    format?: 'json';
-}
-
-export interface GenerateResult {
-    success: boolean;
-    data?: any;
-    error?: string;
-}
-
-export interface TestConnectionResult {
-    success: boolean;
-    error?: string;
-}
-
-export interface FetchModelsResult {
-    success: boolean;
-    models?: OllamaModel[];
-    error?: string;
-}
+export interface OllamaConfig { baseUrl: string; modelName: string; }
+export interface OllamaModel { name: string; modified_at: Date; size: number; digest: string; details: { parent_model: string; format: string; family: string; families: string[] | null; parameter_size: string; quantization_level: string; }; }
+export interface GenerateParams { prompt: string; system?: string; format?: 'json'; }
+export interface GenerateResult { success: boolean; data?: any; error?: string; }
+export interface TestConnectionResult { success: boolean; error?: string; }
+export interface FetchModelsResult { success: boolean; models?: OllamaModel[]; error?: string; }
 
 class OllamaService {
     private config: OllamaConfig;
@@ -61,51 +25,41 @@ class OllamaService {
     }
 
     setConfig(newConfig: Partial<OllamaConfig>) {
-        this.config = {
-            baseUrl: newConfig.baseUrl ?? this.config.baseUrl,
-            modelName: newConfig.modelName ?? this.config.modelName,
-        };
+        this.config = { ...this.config, ...newConfig };
         setItem(LOCAL_STORAGE_KEYS.OLLAMA_CONFIG, this.config);
-        console.log("Formstr: Ollama config updated.", this.config);
     }
 
     private _sendMessage(payload: any): Promise<any> {
+        // --- CHROME LOGIC ---
+        // Checks for the Chrome-specific API first.
         if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
             return new Promise((resolve) => {
                 chrome.runtime.sendMessage(this.EXTENSION_IDS.CHROME, payload, (response) => {
                     if (chrome.runtime.lastError) {
-                        console.error("Formstr: Chrome extension error:", chrome.runtime.lastError.message);
                         resolve({ success: false, error: `Chrome Error: ${chrome.runtime.lastError.message}` });
                     } else {
-                        console.log("[OllamaService] Received response via Chrome API:", response);
                         resolve(response);
                     }
                 });
             });
-        } else if (typeof browser !== 'undefined' && browser.runtime && browser.runtime.sendMessage) {
-            return browser.runtime.sendMessage(this.EXTENSION_IDS.FIREFOX, payload).catch((error) => {
-                console.error("[OllamaService] Firefox extension error:", error);
-                return { success: false, error: `Firefox Error: ${error.message}` };
-            });
-        } else {
-            console.warn("[OllamaService] No extension runtime available, falling back to postMessage.");
-            return new Promise((resolve) => {
-                const listener = (event: MessageEvent) => {
-                    if (event.source === window && event.data && event.data.direction === "extension-to-formstr") {
-                        window.removeEventListener("message", listener);
-                        console.log("[OllamaService] Received response via postMessage:", event.data.message);
-                        resolve(event.data.message);
-                    }
-                };
-                window.addEventListener("message", listener);
-                window.postMessage({ direction: "formstr-to-extension", message: payload }, "*");
-            });
         }
+        
+        // --- FIREFOX LOGIC (and other browsers) ---
+        // If not Chrome, it defaults to the content script bridge method.
+        return new Promise((resolve) => {
+            const listener = (event: MessageEvent) => {
+                if (event.source === window && event.data && event.data.direction === "extension-to-formstr") {
+                    window.removeEventListener("message", listener);
+                    resolve(event.data.message);
+                }
+            };
+            window.addEventListener("message", listener);
+            window.postMessage({ direction: "formstr-to-extension", message: payload }, "*");
+        });
     }
 
     private async _request(endpoint: string, options: RequestInit): Promise<any> {
-        console.log(`[OllamaService] Sending request to endpoint: ${endpoint}`);
-        const response = await this._sendMessage({
+        return this._sendMessage({
             type: "ollamaRequest",
             endpoint,
             options: {
@@ -114,10 +68,6 @@ class OllamaService {
                 headers: options.headers,
             },
         });
-        if (response.error === 'Chrome Error: No extension runtime available' || response.error === 'Firefox Error: No extension runtime available') {
-            return { success: false, error: 'EXTENSION_NOT_FOUND' };
-        }
-        return response;
     }
 
     async testConnection(): Promise<TestConnectionResult> {
