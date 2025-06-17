@@ -46,8 +46,8 @@ export interface FetchModelsResult {
 class OllamaService {
     private config: OllamaConfig;
     private EXTENSION_IDS = {
-        CHROME: "nopcdaggijpnmjppjojpeoelfdjodkjd",
-        FIREFOX: "7749abb7-5539-4514-92f5-66a108456d0d"
+        CHROME: "fniocoloapgjeahkendjimlbannfnjoc",
+        FIREFOX: "ollama-llm-extension@firefox.user"
     };
 
     constructor() {
@@ -142,10 +142,12 @@ class OllamaService {
             system: params.system,
             format: params.format,
         };
-            console.log("[OllamaService] Request sent:", body);        const response = await this._request('/api/generate', {
+            console.log("[OllamaService] Input to Ollama:", body);
+        const response = await this._request('/api/generate', {
             method: 'POST',
             body: JSON.stringify(body),
         });
+        console.log("[OllamaService] Output from Ollama:", response);
         return { success: response.success, data: response.data, error: response.error };
     }
 }

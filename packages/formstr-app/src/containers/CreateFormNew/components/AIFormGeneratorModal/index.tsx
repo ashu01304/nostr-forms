@@ -34,6 +34,19 @@ Here is the required JSON schema for the form:
 CRITICAL RULES:
 - Your response MUST be ONLY the JSON object that validates against the schema above.
 - Do NOT include any extra text, explanations, or markdown formatting like \`\`\`json.
+
+For Example for output with one field:
+"{
+  "title": "Appropriate Form Title",
+  "description": "Appropriate Form Description",
+  "fields": [
+    {
+      "type": "ShortText",
+      "label": "Name",
+      "required": true
+    }
+  ]
+}"
 `;
 
 const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onClose,onFormGenerated}) => {
