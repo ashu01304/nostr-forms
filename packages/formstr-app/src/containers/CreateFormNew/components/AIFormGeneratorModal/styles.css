@@ -1,0 +1,60 @@
+.ai-modal-divider {
+    margin: 12px 0 !important;
+}
+
+.ai-modal-controls-container {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.ai-modal-model-selector-wrapper {
+    flex: 1;
+}
+
+.ai-modal-button-success {
+    background-color: #52c41a;
+    color: white;
+    border-color: #52c41a;
+}
+
+.ai-modal-button-success:hover {
+    background-color: #73d13d;
+    color: white !important;
+    border-color: #73d13d !important;
+}
+
+.ai-modal-button-danger {
+    background-color: #ff4d4f;
+    color: white;
+    border-color: #ff4d4f;
+}
+
+.ai-modal-button-danger:hover {
+    background-color: #ff7875;
+    color: white !important;
+    border-color: #ff7875 !important;
+}
+
+.settings-title {
+    margin-top: 0 !important;
+    margin-bottom: 0.25em !important;
+}
+
+.settings-paragraph {
+    margin-bottom: 1em !important;
+}
+
+.settings-paragraph-tight {
+    margin-bottom: 0 !important;
+}
+
+.settings-list {
+    margin: 8px 0 12px 24px !important;
+    padding: 0 !important;
+}
+
+.settings-final-paragraph {
+    margin-top: 0 !important;
+}

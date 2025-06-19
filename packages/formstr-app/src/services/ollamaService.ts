@@ -10,7 +10,7 @@ export interface FetchModelsResult { success: boolean; models?: OllamaModel[]; e
 class OllamaService {
     private config: OllamaConfig;
     private EXTENSION_IDS = {
-        CHROME: "dhbelpbeppophhapfdhhlgkmbmhniolh",
+        CHROME: "bdbifajbppomeiffjcgipolghhlipain",
         FIREFOX: "ollama-llm-extension@firefox.user"
     };
 

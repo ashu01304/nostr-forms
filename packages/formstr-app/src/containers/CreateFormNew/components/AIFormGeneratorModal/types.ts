@@ -6,27 +6,14 @@ export interface AIFormGeneratorModalProps {
     onClose: () => void;
     onFormGenerated: (processedData: ProcessedFormData) => void;
 }
-export interface FormTypeOption {
-    value: string;
-    label: string;
-}
 export interface OllamaSettingsProps {
-    onTestConnection: () => void;
-    loading: boolean;
 }
 export interface ModelSelectorProps {
     model: string;
     setModel: (model: string) => void;
     availableModels: OllamaModel[];
     fetchingModels: boolean;
-    fetchModels: () => void;
     disabled: boolean;
-}
-export interface ConnectionStatusDisplayProps {
-    loading: boolean;
-    connectionStatus: boolean | null;
-    error: string | null;
-    modelCount: number;
 }
 export interface GenerationPanelProps {
     prompt: string;
@@ -34,9 +21,4 @@ export interface GenerationPanelProps {
     onGenerate: () => void;
     loading: boolean;
     disabled: boolean;
-}
-export interface ResponsePreviewProps {
-    loading: boolean;
-    generationResponse: string | null;
-    error: string | null;
 }

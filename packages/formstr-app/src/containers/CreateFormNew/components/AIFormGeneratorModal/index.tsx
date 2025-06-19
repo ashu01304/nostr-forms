@@ -6,7 +6,7 @@ import { AIFormGeneratorModalProps } from './types';
 import OllamaSettings from './OllamaSettings';
 import ModelSelector from './ModelSelector';
 import GenerationPanel from './GenerationPanel';
-import ConnectionStatusDisplay from './ConnectionStatusDisplay';
+import './styles.css';
 
 const FORM_GENERATION_SYSTEM_PROMPT = `You are an expert JSON generator. Based on the user's request, create a form structure.
 Here is the required JSON schema for the form:
@@ -54,15 +54,24 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
     const [loading, setLoading] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState<boolean | null>(null);
-    const [error, setError] = useState<string | null>(null);
     const [availableModels, setAvailableModels] = useState<OllamaModel[]>([]);
     const [fetchingModels, setFetchingModels] = useState(false);
     const [config, setConfig] = useState<OllamaConfig>(ollamaService.getConfig());
 
+    const fetchModels = useCallback(async () => {
+        setFetchingModels(true);
+        const result = await ollamaService.fetchModels();
+        if (result.success && result.models) {
+            setAvailableModels(result.models);
+        } else {
+            setAvailableModels([]); // Clear models on failure
+            message.error(result.error || 'Failed to fetch models.');
+        }
+        setFetchingModels(false);
+    }, []);
+
     const testConnection = useCallback(async () => {
         setLoading(true);
-        setError(null);
-        setConnectionStatus(null);
         console.log("Formstr: Testing Ollama connection...");
         const result = await ollamaService.testConnection();
         setLoading(false);
@@ -72,7 +81,6 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
             fetchModels();
         } else {
             setConnectionStatus(false);
-            setError(result.error || 'Failed to connect.');
             console.error("Formstr: Connection test failed.", result.error);
             if (result.error === 'EXTENSION_NOT_FOUND') {
                 message.error(
@@ -80,7 +88,7 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
                         Ollama extension not found. Please install our companion extension for a seamless experience.
                         <Button
                             type="link"
-                            href="https://chromewebstore.google.com/"
+                            href="https://github.com/ashu01304/Ollama_Web"
                             target="_blank"
                         >
                             Install Now
@@ -92,18 +100,7 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
                 message.error(`Connection failed: ${result.error}`);
             }
         }
-    }, []);
-
-    const fetchModels = useCallback(async () => {
-        setFetchingModels(true);
-        const result = await ollamaService.fetchModels();
-        if (result.success && result.models) {
-            setAvailableModels(result.models);
-        } else {
-            message.error(result.error || 'Failed to fetch models.');
-        }
-        setFetchingModels(false);
-    }, []);
+    }, [fetchModels]);
 
     useEffect(() => {
         if (isOpen) {
@@ -127,7 +124,6 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
             return;
         }
         setGenerating(true);
-        setError(null);
         try {
             const result = await ollamaService.generate({
               prompt: `USER REQUEST: "${prompt}"\nYOUR JSON RESPONSE:`,
@@ -141,15 +137,23 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
                 message.success('Form generated successfully!');
                 onClose();
             } else {
-                setError(result.error || 'Failed to generate form.');
                 message.error(result.error || 'An unexpected error occurred during generation.');
             }
         } catch (err: any) {
-            setError(err.message || 'An unknown error occurred.');
             message.error(err.message || 'An unknown error occurred.');
         } finally {
             setGenerating(false);
         }
+    };
+
+    const getButtonProps = () => {
+        if (connectionStatus === true) {
+            return { className: 'ai-modal-button-success' };
+        }
+        if (connectionStatus === false) {
+            return { className: 'ai-modal-button-danger' };
+        }
+        return {};
     };
 
     return (
@@ -163,33 +167,34 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
             <Typography.Text type="secondary">
                 Powered by your local Ollama instance via the Formstr Companion extension.
             </Typography.Text>
-            <Divider />
-            <OllamaSettings
-                onTestConnection={testConnection}
-                loading={loading}
+            <Divider className="ai-modal-divider" />
+            <div className="ai-modal-controls-container">
+                <div className="ai-modal-model-selector-wrapper">
+                    <ModelSelector
+                        model={config.modelName}
+                        setModel={handleModelChange}
+                        availableModels={availableModels}
+                        fetchingModels={fetchingModels}
+                        disabled={!connectionStatus}
+                    />
+                </div>
+                <Button 
+                    onClick={testConnection} 
+                    disabled={loading}
+                    {...getButtonProps()}
+                >
+                    Test Connection
+                </Button>
+            </div>
+            <OllamaSettings />
+            <Divider className="ai-modal-divider" />
+            <GenerationPanel
+                prompt={prompt}
+                setPrompt={setPrompt}
+                onGenerate={handleGenerate}
+                loading={generating}
+                disabled={!connectionStatus || availableModels.length === 0}
             />
-            <ConnectionStatusDisplay
-                loading={loading}
-                connectionStatus={connectionStatus}
-                error={error}
-                modelCount={availableModels.length}
-                />
-                <ModelSelector
-                     model={config.modelName}
-                     setModel={handleModelChange}
-                     availableModels={availableModels}
-                     fetchingModels={fetchingModels}
-                     fetchModels={fetchModels}
-                     disabled={!connectionStatus}
-                 />
-                <Divider />
-                <GenerationPanel
-                    prompt={prompt}
-                    setPrompt={setPrompt}
-                    onGenerate={handleGenerate}
-                    loading={generating}
-                    disabled={!connectionStatus || availableModels.length === 0}
-                />
         </Modal>
     );
 };

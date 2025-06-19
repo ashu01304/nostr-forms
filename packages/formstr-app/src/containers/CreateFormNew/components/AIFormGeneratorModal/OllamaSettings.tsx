@@ -1,50 +1,39 @@
 import React from 'react';
-import { Typography, Collapse, Button } from 'antd';
+import { Typography, Collapse } from 'antd';
 import { OllamaSettingsProps } from './types';
+import './styles.css';
 
 const { Panel } = Collapse;
-const EXTENSION_ID = "nopcdaggijpnmjppjojpeoelfdjodkjd";
 
-const OllamaSettings: React.FC<OllamaSettingsProps> = ({
-    onTestConnection,
-    loading
-}) => {
+const OllamaSettings: React.FC<OllamaSettingsProps> = () => {
     return (
-        <div style={{ marginBottom: '20px' }}>
-            <Button onClick={onTestConnection} loading={loading} style={{ width: '100%' }}>
-                Test Connection to Ollama Extension
-            </Button>
-            <Collapse ghost style={{ marginTop: '16px' }}>
-                <Panel header="Connection Help & Instructions" key="1">
-                <Typography.Paragraph>
-                    The Formstr Companion extension handles the connection to your Ollama instance. You can set the Ollama server URL in the extension's popup.
-                </Typography.Paragraph>
-                <Typography.Paragraph>
-                    For the extension to communicate with your local Ollama instance, you must configure Ollama to accept requests from the extension's origin.
+        <Collapse ghost>
+            <Panel header="Connection Help & Instructions" key="1">
+                <Typography.Title level={5} className="settings-title">
+                    Step 1: Install the Companion Extension
+                </Typography.Title>
+                <Typography.Paragraph className="settings-paragraph">
+                    This feature requires the Ollama Web <a href="https://github.com/ashu01304/Ollama_Web" target="_blank" rel="noopener noreferrer">
+                    Companion browser extension
+                    </a> to communicate with your local Ollama instance.
                 </Typography.Paragraph>
 
-                <Typography.Title level={5}>macOS / Linux</Typography.Title>
-                <Typography.Paragraph>
-                    Open your terminal and run the following command:
+                <Typography.Title level={5} className="settings-title">
+                    Step 2: Allow This Website
+                </Typography.Title>
+                <Typography.Paragraph className="settings-paragraph-tight">
+                    You must explicitly grant this website permission to use the extension.
+                    <ol className="settings-list">
+                        <li>Open the extension's settings/popup.</li>
+                        <li>Find the "Allowed Domains" list.</li>
+                        <li>Add the web domain of the website or click on "Add Current".</li>
+                    </ol>
                 </Typography.Paragraph>
-                <pre style={{ background: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
-                    <code>{`launchctl setenv OLLAMA_ORIGINS "chrome-extension://${EXTENSION_ID}"`}</code>
-                </pre>
-
-                <Typography.Title level={5}>Windows</Typography.Title>
-                <Typography.Paragraph>
-                    Open PowerShell (as Administrator) and run this command:
+                 <Typography.Paragraph strong className="settings-final-paragraph">
+                    After completing these steps, click the "Test Connection" button above.
                 </Typography.Paragraph>
-                <pre style={{ background: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
-                    <code>{`[System.Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS', 'chrome-extension://${EXTENSION_ID}', 'Machine')`}</code>
-                </pre>
-
-                <Typography.Paragraph strong>
-                    Important: After setting the environment variable, you must restart your Ollama server for the changes to take effect.
-                </Typography.Paragraph>
-                </Panel>
-            </Collapse>
-        </div>
+            </Panel>
+        </Collapse>
     );
 };
 
