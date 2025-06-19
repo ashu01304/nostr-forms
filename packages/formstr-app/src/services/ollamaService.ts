@@ -2,7 +2,7 @@ import { getItem, setItem, LOCAL_STORAGE_KEYS } from '../utils/localStorage';
 
 export interface OllamaConfig { baseUrl: string; modelName: string; }
 export interface OllamaModel { name: string; modified_at: Date; size: number; digest: string; details: { parent_model: string; format: string; family: string; families: string[] | null; parameter_size: string; quantization_level: string; }; }
-export interface GenerateParams { prompt: string; system?: string; format?: 'json'; }
+export interface GenerateParams { prompt: string; system?: string; format?: 'json'; modelName?: string; }
 export interface GenerateResult { success: boolean; data?: any; error?: string; }
 export interface TestConnectionResult { success: boolean; error?: string; }
 export interface FetchModelsResult { success: boolean; models?: OllamaModel[]; error?: string; }
@@ -86,7 +86,7 @@ class OllamaService {
 
     async generate(params: GenerateParams): Promise<GenerateResult> {
         const body = {
-            model: this.config.modelName,
+            model: params.modelName || this.config.modelName,
             prompt: params.prompt,
             stream: false,
             system: params.system,

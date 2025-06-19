@@ -13,6 +13,31 @@ export const ChatWrapper = styled.div`
   .ant-card-head {
     background-color: #fafafa;
   }
+
+  /* Button styling for connection status */
+  .ai-chat-button-success {
+      background-color: #52c41a;
+      color: white;
+      border-color: #52c41a;
+  }
+
+  .ai-chat-button-success:hover {
+      background-color: #73d13d;
+      color: white !important;
+      border-color: #73d13d !important;
+  }
+
+  .ai-chat-button-danger {
+      background-color: #ff4d4f;
+      color: white;
+      border-color: #ff4d4f;
+  }
+
+  .ai-chat-button-danger:hover {
+      background-color: #ff7875;
+      color: white !important;
+      border-color: #ff7875 !important;
+  }
 `;
 
 export const MessageList = styled.div`
