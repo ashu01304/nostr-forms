@@ -1,11 +1,10 @@
 import React from 'react';
 import { Typography, Collapse } from 'antd';
-import { OllamaSettingsProps } from './types';
-import './styles.css';
+import './style.css';
 
 const { Panel } = Collapse;
 
-const OllamaSettings: React.FC<OllamaSettingsProps> = () => {
+const OllamaSettings: React.FC = () => {
     return (
         <Collapse ghost>
             <Panel header="Connection Help & Instructions" key="1">

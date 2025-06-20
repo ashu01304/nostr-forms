@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Button, Card, Input, List, Space, Spin, message } from 'antd';
+import { Button, Card, Divider, Input, List, Space, Spin, message, Collapse } from 'antd';
 import { CloseOutlined, RobotOutlined, SendOutlined } from '@ant-design/icons';
 import { AIAnalysisChatProps, Message } from './types';
 import { ChatWrapper, MessageItem, MessageList } from './style';
 import { ollamaService, OllamaModel } from '../../../../services/ollamaService';
 import ReactMarkdown from 'react-markdown';
 import ModelSelector from '../../../../components/ModelSelector';
+import OllamaSettings from '../../../../components/OllamaSettings';
 
 const { TextArea } = Input;
 
@@ -64,6 +65,7 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
   const [isConnecting, setIsConnecting] = useState(false);
   const initialAnalysisPerformed = useRef(false);
   const messageListRef = useRef<HTMLDivElement>(null);
+  const initialConnectionDone = useRef(false);
 
   useEffect(() => {
     if (messageListRef.current) {
@@ -83,16 +85,16 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
     setFetchingModels(false);
   }, []);
 
-  const testConnection = useCallback(async () => {
+  const testConnection = useCallback(async (showAlerts: boolean = false) => {
       setIsConnecting(true);
       const result = await ollamaService.testConnection();
       if (result.success) {
-          message.success('Successfully connected to Ollama!');
+          if (showAlerts) message.success('Successfully connected to Ollama!');
           setConnectionStatus(true);
           fetchModels();
       } else {
           setConnectionStatus(false);
-          message.error(`Connection failed: ${result.error || 'Unknown error'}`);
+          if (showAlerts) message.error(`Connection failed: ${result.error || 'Unknown error'}`);
       }
       setIsConnecting(false);
   }, [fetchModels]);
@@ -132,8 +134,9 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
   };
 
   useEffect(() => {
-    if (isVisible) {
-        testConnection();
+    if (isVisible && !initialConnectionDone.current) {
+        initialConnectionDone.current = true;
+        testConnection(false);
     }
   }, [isVisible, testConnection]);
 
@@ -171,28 +174,9 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
           </Space>
         }
         extra={
-            <Space>
-                <Space.Compact>
-                    <ModelSelector
-                        model={selectedModel}
-                        setModel={setSelectedModel}
-                        availableModels={availableModels}
-                        fetching={fetchingModels}
-                        disabled={!connectionStatus || fetchingModels}
-                        style={{ width: 180 }}
-                        placeholder="Select model"
-                    />
-                    <Button
-                        onClick={testConnection}
-                        disabled={isConnecting}
-                        {...getButtonProps()}
-                    >
-                        Test Connection
-                    </Button>
-                </Space.Compact>
-                <Button type="text" icon={<CloseOutlined />} onClick={onClose} />
-            </Space>
+            <Button type="text" icon={<CloseOutlined />} onClick={onClose} />
         }
+        bodyStyle={{ paddingTop: 4, paddingBottom: 0 }}
       >
         <MessageList ref={messageListRef}>
           {isAnalyzing && messages.length === 0 ? (
@@ -237,6 +221,29 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
               disabled={controlsDisabled}
             />
           </Space.Compact>
+        </div>
+        <div className="chat-footer-controls">
+            <div className="footer-help-section">
+                <OllamaSettings />
+            </div>
+            <Space>
+                <ModelSelector
+                    model={selectedModel}
+                    setModel={setSelectedModel}
+                    availableModels={availableModels}
+                    fetching={fetchingModels}
+                    disabled={!connectionStatus || fetchingModels}
+                    style={{ width: 180 }}
+                    placeholder="Select model"
+                />
+                <Button
+                    onClick={() => testConnection(true)}
+                    disabled={isConnecting}
+                    {...getButtonProps()}
+                >
+                    Test Connection
+                </Button>
+            </Space>
         </div>
       </Card>
     </ChatWrapper>

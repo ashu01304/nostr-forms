@@ -3,7 +3,7 @@ import { Modal, Divider, message, Button, Typography } from 'antd';
 import { ollamaService, OllamaModel, OllamaConfig } from '../../../../services/ollamaService';
 import { processOllamaFormData } from '../../../../utils/aiProcessor';
 import { AIFormGeneratorModalProps } from './types';
-import OllamaSettings from './OllamaSettings';
+import OllamaSettings from '../../../../components/OllamaSettings';
 import ModelSelector from './ModelSelector';
 import GenerationPanel from './GenerationPanel';
 import './styles.css';

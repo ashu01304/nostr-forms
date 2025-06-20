@@ -2,7 +2,7 @@ import styled from 'styled-components';
 
 export const ChatWrapper = styled.div`
   width: 100%;
-  margin-top: 24px;
+  margin-top: 8px;
   
   .ant-card {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
@@ -13,8 +13,31 @@ export const ChatWrapper = styled.div`
   .ant-card-head {
     background-color: #fafafa;
   }
+  
+  .chat-footer-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
 
-  /* Button styling for connection status */
+  .footer-help-section {
+    flex-grow: 1;
+    position: relative;
+  }
+
+  .footer-help-section .ant-collapse-content {
+    position: absolute;
+    bottom: calc(100%); /* Position above the header */
+    left: 0;
+    right: 0;
+    min-width: 400px;
+    background-color: #ffffff;
+    border: 1px solid #f0f0f0;
+    z-index: 10;
+    border-radius: 8px;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+  }
+
   .ai-chat-button-success {
       background-color: #52c41a;
       color: white;
@@ -41,10 +64,10 @@ export const ChatWrapper = styled.div`
 `;
 
 export const MessageList = styled.div`
-  height: 300px; /* Set a fixed height for scrolling */
+  height: 300px;
   overflow-y: auto;
-  margin-bottom: 16px;
-  padding-right: 8px; /* For scrollbar */
+  margin-bottom: 0px;
+  padding-right: 8px;
 `;
 
 export const MessageItem = styled.div<{ sender: 'user' | 'ai' }>`
