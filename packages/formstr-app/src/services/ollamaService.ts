@@ -7,12 +7,16 @@ export interface GenerateResult { success: boolean; data?: any; error?: string; 
 export interface TestConnectionResult { success: boolean; error?: string; }
 export interface FetchModelsResult { success: boolean; models?: OllamaModel[]; error?: string; }
 
+declare global {
+    interface Window {
+        ollama?: {
+            request: (endpoint: string, options: RequestInit) => Promise<any>;
+        };
+    }
+}
+
 class OllamaService {
     private config: OllamaConfig;
-    private EXTENSION_IDS = {
-        CHROME: "bdbifajbppomeiffjcgipolghhlipain",
-        FIREFOX: "ollama-llm-extension@firefox.user"
-    };
 
     constructor() {
         this.config = this.getConfig();
@@ -29,45 +33,15 @@ class OllamaService {
         setItem(LOCAL_STORAGE_KEYS.OLLAMA_CONFIG, this.config);
     }
 
-    private _sendMessage(payload: any): Promise<any> {
-        // --- CHROME LOGIC ---
-        // Checks for the Chrome-specific API first.
-        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-            return new Promise((resolve) => {
-                chrome.runtime.sendMessage(this.EXTENSION_IDS.CHROME, payload, (response) => {
-                    if (chrome.runtime.lastError) {
-                        resolve({ success: false, error: `Chrome Error: ${chrome.runtime.lastError.message}` });
-                    } else {
-                        resolve(response);
-                    }
-                });
-            });
-        }
-        
-        // --- FIREFOX LOGIC (and other browsers) ---
-        // If not Chrome, it defaults to the content script bridge method.
-        return new Promise((resolve) => {
-            const listener = (event: MessageEvent) => {
-                if (event.source === window && event.data && event.data.direction === "extension-to-formstr") {
-                    window.removeEventListener("message", listener);
-                    resolve(event.data.message);
-                }
-            };
-            window.addEventListener("message", listener);
-            window.postMessage({ direction: "formstr-to-extension", message: payload }, "*");
-        });
-    }
-
     private async _request(endpoint: string, options: RequestInit): Promise<any> {
-        return this._sendMessage({
-            type: "ollamaRequest",
-            endpoint,
-            options: {
-                method: options.method,
-                body: options.body,
-                headers: options.headers,
-            },
-        });
+        if (!window.ollama) {
+            return { success: false, error: 'EXTENSION_NOT_FOUND' };
+        }
+        try {
+            return await window.ollama.request(endpoint, options);
+        } catch (error: any) {
+            return { success: false, error: error.message || 'An unknown communication error occurred.' };
+        }
     }
 
     async testConnection(): Promise<TestConnectionResult> {
