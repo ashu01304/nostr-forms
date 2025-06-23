@@ -11,6 +11,9 @@ declare global {
     interface Window {
         ollama?: {
             request: (endpoint: string, options: RequestInit) => Promise<any>;
+            getModels: () => Promise<any>;
+            generate: (params: any) => Promise<any>;
+            testConnection: () => Promise<any>;
         };
     }
 }
@@ -20,7 +23,7 @@ class OllamaService {
 
     constructor() {
         this.config = this.getConfig();
-        console.log("Formstr: OllamaService initialized.");
+        console.log("DEBUG : Formstr: OllamaService initialized.");
     }
 
     getConfig(): OllamaConfig {
@@ -33,32 +36,29 @@ class OllamaService {
         setItem(LOCAL_STORAGE_KEYS.OLLAMA_CONFIG, this.config);
     }
 
-    private async _request(endpoint: string, options: RequestInit): Promise<any> {
+    async testConnection(): Promise<TestConnectionResult> {
         if (!window.ollama) {
             return { success: false, error: 'EXTENSION_NOT_FOUND' };
         }
-        try {
-            return await window.ollama.request(endpoint, options);
-        } catch (error: any) {
-            return { success: false, error: error.message || 'An unknown communication error occurred.' };
-        }
-    }
-
-    async testConnection(): Promise<TestConnectionResult> {
-        const response = await this._request('/', { method: 'GET' });
-        return { success: response.success, error: response.error };
+        return window.ollama.testConnection();
     }
 
     async fetchModels(): Promise<FetchModelsResult> {
-        const response = await this._request('/api/tags', { method: 'GET' });
-        return {
+       if (!window.ollama) {
+            return { success: false, error: 'EXTENSION_NOT_FOUND' };
+       }
+       const response = await window.ollama.getModels();
+       return {
             success: response.success,
             models: response.data?.models,
             error: response.error,
-        };
+       };
     }
 
     async generate(params: GenerateParams): Promise<GenerateResult> {
+        if (!window.ollama) {
+            return { success: false, error: 'EXTENSION_NOT_FOUND' };
+        }
         const body = {
             model: params.modelName || this.config.modelName,
             prompt: params.prompt,
@@ -66,12 +66,9 @@ class OllamaService {
             system: params.system,
             format: params.format,
         };
-            console.log("[OllamaService] Input to Ollama:", body);
-        const response = await this._request('/api/generate', {
-            method: 'POST',
-            body: JSON.stringify(body),
-        });
-        console.log("[OllamaService] Output from Ollama:", response);
+        console.log("DEBUG : [OllamaService] Input to Ollama:", body);
+        const response = await window.ollama.generate(body);
+        console.log("DEBUG : [OllamaService] Output from Ollama:", response);
         return { success: response.success, data: response.data, error: response.error };
     }
 }
