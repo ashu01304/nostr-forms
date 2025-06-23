@@ -387,11 +387,12 @@ export const Response = () => {
           />
         </div>
         <div ref={chatRef}>
-         {isChatVisible && (
+         {isChatVisible && formSpec && (
             <AIAnalysisChat 
                 isVisible={isChatVisible}
                 onClose={() => setIsChatVisible(false)}
                 responsesData={getData(true)}
+                formSpec={formSpec}
             />
          )}
         </div>
