@@ -64,8 +64,7 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
         if (result.success && result.models) {
             setAvailableModels(result.models);
         } else {
-            setAvailableModels([]); // Clear models on failure
-            message.error(result.error || 'Failed to fetch models.');
+            setAvailableModels([]);
         }
         setFetchingModels(false);
     }, []);
@@ -85,16 +84,16 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
             if (result.error === 'EXTENSION_NOT_FOUND') {
                 message.error(
                     <>
-                        Ollama extension not found. Please install our companion extension for a seamless experience.
+                        Ollama Web Companion extension not found. Please install it to use this feature.
                         <Button
                             type="link"
                             href="https://github.com/ashu01304/Ollama_Web"
                             target="_blank"
                         >
-                            Install Now
+                            Get Extension
                         </Button>
                     </>,
-                    10
+                    10 // Keep message open for 10 seconds
                 );
             } else {
                 message.error(`Connection failed: ${result.error}`);
@@ -180,7 +179,7 @@ const AIFormGeneratorModal: React.FC<AIFormGeneratorModalProps> = ({ isOpen, onC
                 </div>
                 <Button 
                     onClick={testConnection} 
-                    disabled={loading}
+                    loading={loading}
                     {...getButtonProps()}
                 >
                     Test Connection

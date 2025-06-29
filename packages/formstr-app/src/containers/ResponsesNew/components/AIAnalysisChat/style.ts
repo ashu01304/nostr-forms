@@ -39,27 +39,27 @@ export const ChatWrapper = styled.div`
   }
 
   .ai-chat-button-success {
-      background-color: #52c41a;
+      background-color: #00796b;
       color: white;
-      border-color: #52c41a;
+      border-color: #00796b;
   }
 
   .ai-chat-button-success:hover {
-      background-color: #73d13d;
+      background-color: #004d40;
       color: white !important;
-      border-color: #73d13d !important;
+      border-color: #004d40 !important;
   }
 
   .ai-chat-button-danger {
-      background-color: #ff4d4f;
+      background-color: #d32f2f;
       color: white;
-      border-color: #ff4d4f;
+      border-color: #d32f2f;
   }
 
   .ai-chat-button-danger:hover {
-      background-color: #ff7875;
+      background-color: #c62828;
       color: white !important;
-      border-color: #ff7875 !important;
+      border-color: #c62828 !important;
   }
 `;
 

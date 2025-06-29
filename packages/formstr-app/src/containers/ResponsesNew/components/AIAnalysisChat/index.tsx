@@ -24,7 +24,7 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
   const [fetchingModels, setFetchingModels] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<boolean | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  
+  const [streamingText, setStreamingText] = useState('');
   const initialAnalysisPerformed = useRef(false);
   const messageListRef = useRef<HTMLDivElement>(null);
   const trueDataRef = useRef<string>('');
@@ -34,14 +34,13 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
     if (messageListRef.current) {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
-  }, [chatHistory, isAnalyzing]);
+  }, [chatHistory, isAnalyzing, streamingText]);
   
   const fetchModels = useCallback(async () => {
     setFetchingModels(true);
     const result = await ollamaService.fetchModels();
     if (result.success && result.models && result.models.length > 0) {
         setAvailableModels(result.models);
-        // Respect existing selection if it's still available, otherwise default
         const currentConfig = ollamaService.getConfig();
         const modelStillExists = result.models.some(m => m.name === currentConfig.modelName);
         if (modelStillExists) {
@@ -79,10 +78,7 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
   useEffect(() => {
     if (isVisible) {
       if (!initialConnectionDone.current) {
-        console.log("Chat visible. Raw data received:", responsesData);
         trueDataRef.current = createAnalysisReport(responsesData, formSpec);
-        console.log("Processed True_data (Analysis Report) for AI:\n", trueDataRef.current);
-        // Set initial model from storage before testing connection
         setSelectedModel(ollamaService.getConfig().modelName);
         testConnection(false);
         initialConnectionDone.current = true;
@@ -96,64 +92,64 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
 
   useEffect(() => {
     const lastMessage = chatHistory[chatHistory.length - 1];
-    if (!lastMessage || lastMessage.sender !== 'user') {
-        return;
-    }
+    const isInitialCall = chatHistory.length === 0 && isVisible && !initialAnalysisPerformed.current && selectedModel && connectionStatus;
+    const isUserCall = lastMessage?.sender === 'user';
 
-    const runDirectAnalysis = async () => {
+    if (!isInitialCall && !isUserCall) return;
+
+    const runStreamingAnalysis = async () => {
         setIsAnalyzing(true);
-        const query = lastMessage.text;
-        const historyForPrompt = chatHistory.slice(0, -1);
-        const historyText = formatChatHistory(historyForPrompt);
+        setStreamingText('');
+        let completeResponse = '';
 
-        console.group(`[AI Flow] Handling User Query: "${query}"`);
+        const onData = (chunk: any) => {
+            if (chunk.response) {
+                const textChunk = chunk.response;
+                completeResponse += textChunk;
+                setStreamingText(prev => prev + textChunk);
+            }
+        };
+
         try {
-            const finalAnswer = await generateDirectAnswer({ query, historyText, trueData: trueDataRef.current, modelName: selectedModel });
-            setChatHistory(prev => [...prev, { sender: 'ai', text: finalAnswer }]);
+            if (isInitialCall) {
+                initialAnalysisPerformed.current = true;
+                const query = "Provide a general, concise analysis of the entire dataset. Start with the pre-computed summary and option breakdowns.";
+                const draftResult = await generateDraftAnswer({ query, historyText: "", trueData: trueDataRef.current, modelName: selectedModel });
+                if (!draftResult.success) throw new Error(draftResult.error);
+                
+                const draftAnswer = draftResult.data.response;
+                await refineAndCorrectAnswer({ query, historyText: "", trueData: trueDataRef.current, modelName: selectedModel, draftAnswer }, onData);
+                
+                // FIX: Add the final complete response to history
+                setChatHistory([{ sender: 'ai', text: completeResponse }]);
+
+            } else if (isUserCall) {
+                const query = lastMessage.text;
+                const historyForPrompt = chatHistory.slice(0, -1);
+                const historyText = formatChatHistory(historyForPrompt);
+                await generateDirectAnswer({ query, historyText, trueData: trueDataRef.current, modelName: selectedModel }, onData);
+
+                // FIX: Add the final complete response to history
+                setChatHistory(prev => [...prev, { sender: 'ai', text: completeResponse }]);
+            }
         } catch (e: any) {
-            console.error('[AI Flow] Error during direct answer generation:', e);
-            message.error(e.message);
-            setChatHistory(prev => [...prev, { sender: 'ai', text: `Sorry, an error occurred: ${e.message}` }]);
+            message.error(e.message || 'An error occurred during analysis.');
+            const errorMessage = { sender: 'ai' as const, text: `Sorry, an error occurred: ${e.message}` };
+            if (isInitialCall) setChatHistory([errorMessage]);
+            else setChatHistory(prev => [...prev, errorMessage]);
         } finally {
             setIsAnalyzing(false);
-            console.groupEnd();
+            // FIX: Clear the temporary streaming text state
+            setStreamingText('');
         }
     };
-    
-    runDirectAnalysis();
-  }, [chatHistory, selectedModel]);
 
-  useEffect(() => {
-    const runInitialAnalysis = async () => {
-        if (isVisible && !initialAnalysisPerformed.current && selectedModel && connectionStatus) {
-            initialAnalysisPerformed.current = true;
-            setIsAnalyzing(true);
-            const query = "Provide a general, concise analysis of the entire dataset. Start with the pre-computed summary and option breakdowns.";
-            console.group(`[AI Flow] Performing Initial Automated Analysis`);
-            try {
-                const draft = await generateDraftAnswer({ query, historyText: "", trueData: trueDataRef.current, modelName: selectedModel });
-                const final = await refineAndCorrectAnswer({ query, historyText: "", trueData: trueDataRef.current, modelName: selectedModel, draftAnswer: draft });
-                setChatHistory([{ sender: 'ai', text: final }]);
-            } catch (e: any) {
-                console.error('[AI Flow] Error during initial analysis:', e);
-                message.error(e.message);
-                setChatHistory([{sender: 'ai', text: `Sorry, an error occurred during initial analysis: ${e.message}`}]);
-            } finally {
-                setIsAnalyzing(false);
-                console.groupEnd();
-            }
-        }
-    };
-    runInitialAnalysis();
-  }, [isVisible, selectedModel, connectionStatus]);
+    runStreamingAnalysis();
+  }, [chatHistory, isVisible, selectedModel, connectionStatus]);
   
   const getButtonProps = () => {
-    if (connectionStatus === true) {
-        return { className: 'ai-chat-button-success' };
-    }
-    if (connectionStatus === false) {
-        return { className: 'ai-chat-button-danger' };
-    }
+    if (connectionStatus === true) return { className: 'ai-chat-button-success' };
+    if (connectionStatus === false) return { className: 'ai-chat-button-danger' };
     return {};
   };
 
@@ -169,26 +165,21 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
         bodyStyle={{ paddingTop: 4, paddingBottom: 0 }}
       >
         <MessageList ref={messageListRef}>
-          {isAnalyzing && chatHistory.length === 0 ? (
-            <MessageItem sender="ai">
-              <div className="message-bubble"><Spin size="small" /> Thinking...</div>
-            </MessageItem>
-          ) : (
-            <>
-              <List
-                dataSource={chatHistory}
-                renderItem={(item) => (
-                    <MessageItem sender={item.sender}>
-                    <div className="message-bubble"><ReactMarkdown>{item.text}</ReactMarkdown></div>
-                    </MessageItem>
-                )}
-              />
-              {isAnalyzing && (
-                <MessageItem sender="ai">
-                  <div className="message-bubble"><Spin size="small" /> Thinking...</div>
+          <List
+            dataSource={chatHistory}
+            renderItem={(item) => (
+                <MessageItem sender={item.sender}>
+                <div className="message-bubble"><ReactMarkdown>{item.text}</ReactMarkdown></div>
                 </MessageItem>
-              )}
-            </>
+            )}
+          />
+          {isAnalyzing && (
+            <MessageItem sender="ai">
+              <div className="message-bubble">
+                <ReactMarkdown>{streamingText}</ReactMarkdown>
+                <Spin size="small" style={{ marginLeft: '8px' }}/>
+              </div>
+            </MessageItem>
           )}
         </MessageList>
         <div style={{ marginTop: 'auto' }}>
@@ -231,7 +222,7 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
                 />
                 <Button
                     onClick={() => testConnection(true)}
-                    disabled={isConnecting}
+                    loading={isConnecting}
                     {...getButtonProps()}
                 >
                     Test Connection
