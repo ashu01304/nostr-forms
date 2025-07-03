@@ -61,10 +61,8 @@ const NpubListItem: FC<{ pubkey: string; onRemove: (pubkey: string) => void }> =
     }, [pubkey]);
 
     const npub = nip19.npubEncode(pubkey);
-    const displayName =
-      profile?.display_name ||
-      profile?.name ||
-      `${npub.substring(0, 10)}...${npub.substring(npub.length - 5)}`;
+    const shortNpub = `${npub.substring(0, 10)}...${npub.substring(npub.length - 5)}`;
+    const displayName = profile?.display_name || profile?.name || shortNpub;
 
     const handleCopy = () => {
       navigator.clipboard.writeText(npub);
@@ -86,6 +84,9 @@ const NpubListItem: FC<{ pubkey: string; onRemove: (pubkey: string) => void }> =
           <Typography.Text>{displayName}</Typography.Text>
         </div>
         <Space>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {shortNpub}
+          </Typography.Text>
           <Tooltip title="Copy npub">
             <Button type="text" icon={<CopyOutlined />} onClick={handleCopy} />
           </Tooltip>
