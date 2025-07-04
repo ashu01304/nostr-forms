@@ -25,7 +25,6 @@ const AI_TYPE_TO_INTERNAL_MAP: { [key: string]: { primitive: string; renderEleme
     Paragraph: { primitive: 'text', renderElement: AnswerTypes.paragraph },
     Email: { primitive: 'text', renderElement: AnswerTypes.shortText },
     Number: { primitive: 'number', renderElement: AnswerTypes.number },
-    MultipleChoice: { primitive: 'option', renderElement: AnswerTypes.checkboxes },
     SingleChoice: { primitive: 'option', renderElement: AnswerTypes.radioButton },
     Checkbox: { primitive: 'option', renderElement: AnswerTypes.checkboxes },
     Dropdown: { primitive: 'option', renderElement: AnswerTypes.dropdown },
@@ -45,14 +44,18 @@ export function processOllamaFormData(ollamaData: OllamaFormData): ProcessedForm
     const description = ollamaData.description || '';
     const sourceFields = ollamaData.fields;
     const processedFields: Field[] = [];
+    const processedIndices = new Set<number>();
 
-    for (let i = 0; i < sourceFields.length; i++) {
-        const aiField = sourceFields[i];
+    sourceFields.forEach((aiField, i) => {
+        if (processedIndices.has(i)) {
+            return; 
+        }
+
         const uniqueId = makeTag(6);
         const aiFieldType = aiField.type || 'text';
         let label = aiField.label || `Untitled ${uniqueId}`;
         const labelLower = label.toLowerCase();
-        const hasOptions = Array.isArray(aiField.options) && aiField.options.length > 0;
+        let hasOptions = Array.isArray(aiField.options) && aiField.options.length > 0;
         const typeMappingLookup = AI_TYPE_TO_INTERNAL_MAP[aiFieldType];
         let typeMapping = typeMappingLookup || AI_TYPE_TO_INTERNAL_MAP.default;
         let primitiveType = typeMapping.primitive;
@@ -97,7 +100,7 @@ export function processOllamaFormData(ollamaData: OllamaFormData): ProcessedForm
                 console.warn(`Merging options from next field (index ${i + 1}) into current field "${label}" (index ${i})`);
                 optionsSource = nextAiField.options;
                 fieldLabelToUse = label;
-                i++;
+                processedIndices.add(i + 1);
             }
         }
         if (optionsSource && Array.isArray(optionsSource) && optionsSource.length > 0 && (
@@ -124,5 +127,6 @@ export function processOllamaFormData(ollamaData: OllamaFormData): ProcessedForm
         ];
         processedFields.push(newField);
     }
+);
     return { fields: processedFields, formName, description };
 }

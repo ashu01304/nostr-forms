@@ -14,9 +14,6 @@ declare global {
             request: (endpoint: string, options: RequestInit) => Promise<any>;
             getModels: () => Promise<any>;
             generate: (params: any, onData?: (chunk: any) => void) => Promise<any>;
-            chat: (params: any, onData?: (chunk: any) => void) => Promise<any>;
-            pull: (params: any, onData?: (chunk: any) => void) => Promise<any>;
-            delete: (params: any) => Promise<any>;
             testConnection: () => Promise<any>;
         };
     }
