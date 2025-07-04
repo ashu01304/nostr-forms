@@ -11,13 +11,14 @@ import {
 import AddNpubStyle from "../addNpub.style";
 import { FC, useEffect, useState } from "react";
 import { isValidNpub } from "./utils";
-import { SimplePool, nip19 } from "nostr-tools";
+import { nip19 } from "nostr-tools";
 import {
   CloseCircleOutlined,
   CopyOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import { getDefaultRelays } from "@formstr/sdk";
+import { useApplicationContext } from "../../../../../hooks/useApplicationContext";
 
 interface NpubListProps {
   NpubList: Set<string> | null;
@@ -34,10 +35,11 @@ interface Profile {
 const NpubListItem: FC<{ pubkey: string; onRemove: (pubkey: string) => void }> =
   ({ pubkey, onRemove }) => {
     const [profile, setProfile] = useState<Profile | undefined>(undefined);
+    const { poolRef } = useApplicationContext();
 
     useEffect(() => {
       const getProfile = async () => {
-        const pool = new SimplePool();
+        const pool = poolRef.current;
         const relays = getDefaultRelays();
         try {
           const profileEvent = await pool.get(relays, {
@@ -50,15 +52,13 @@ const NpubListItem: FC<{ pubkey: string; onRemove: (pubkey: string) => void }> =
           }
         } catch (error) {
           console.error("Failed to fetch profile", error);
-        } finally {
-          pool.close(relays);
         }
       };
 
       if (pubkey) {
         getProfile();
       }
-    }, [pubkey]);
+    }, [pubkey, poolRef]);
 
     const npub = nip19.npubEncode(pubkey);
     const shortNpub = `${npub.substring(0, 10)}...${npub.substring(npub.length - 5)}`;
