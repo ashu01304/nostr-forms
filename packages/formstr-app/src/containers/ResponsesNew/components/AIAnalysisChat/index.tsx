@@ -1,4 +1,3 @@
-// packages/formstr-app/src/containers/ResponsesNew/components/AIAnalysisChat/index.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Card, Input, List, Space, Spin, message, Collapse } from 'antd';
 import { CloseOutlined, RobotOutlined, SendOutlined } from '@ant-design/icons';
@@ -114,7 +113,7 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
         try {
             if (isInitialCall) {
                 initialAnalysisPerformed.current = true;
-                const query = "Provide a general, concise analysis of the entire dataset. Start with the pre-computed summary and option breakdowns.";
+                const query = "Provide a general, concise analysis of the entire dataset. Start with the pre-computed summary, and conclude everything under 50 words";
                 const draftResult = await generateDraftAnswer({ query, historyText: "", trueData: trueDataRef.current, modelName: selectedModel });
                 if (!draftResult.success) throw new Error(draftResult.error);
                 

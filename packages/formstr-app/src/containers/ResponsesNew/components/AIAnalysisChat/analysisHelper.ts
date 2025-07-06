@@ -1,4 +1,3 @@
-// packages/formstr-app/src/containers/ResponsesNew/components/AIAnalysisChat/analysisHelper.ts
 import { ollamaService } from "../../../../services/ollamaService";
 import { Field, Tag } from "../../../../nostr/types";
 
@@ -75,7 +74,7 @@ interface AnalysisParams {
 }
 
 export const generateDraftAnswer = async ({ query, historyText, trueData, modelName }: AnalysisParams) => {
-    const systemPrompt = `You are a data analyst. Using the TRUE_DATA, generate a very small and strightforward analysis (under 50 words) of important things. Avoid extra text or insight.
+    const systemPrompt = `You are a data analyst. Using the TRUE_DATA, generate a very small and strightforward analysis of important things. NO EXTRA TEXT OR INSIGHT. Do not mention about TRUE_DATA, QUERY in the response. Do not print the entire TRUE_DATA.
 
     TRUE_DATA :
     ${trueData}
@@ -89,7 +88,7 @@ export const generateDraftAnswer = async ({ query, historyText, trueData, modelN
     return result;
 };
 
-export const refineAndCorrectAnswer = async ({ query, historyText, trueData, modelName, draftAnswer }: AnalysisParams & { draftAnswer: string }, onData?: (chunk: any) => void) => {
+export const refineAndCorrectAnswer = async ({ query, trueData, modelName, draftAnswer }: AnalysisParams & { draftAnswer: string }, onData?: (chunk: any) => void) => {
     const systemPrompt = `You are a fact-checker. check the DRAFT_ANSWER using the TRUE_DATA and QUERY. Correct if needed. Avoid extra text, remove if some data is irrelevent and provide the final result, do not mention about TRUE_DATA, QUERY in the response .
 
     TRUE_DATA :
@@ -98,15 +97,15 @@ export const refineAndCorrectAnswer = async ({ query, historyText, trueData, mod
     QUERY :
     ${query}
 
-    Final Answwer: your strightforward, informative and short complete response for user. Avoid extra text
+    Final Answwer: your strightforward, informative and short complete response for user. In least wordes, no extra text, no tips, no explanation, just the answer.
     `;
     
-    const correctorPrompt = `DRAFT_ANSWER : \n${draftAnswer}\n\nBased on all context, produce the final, corrected answer.`;
+    const correctorPrompt = `DRAFT_ANSWER : \n${draftAnswer}\n\nBased on all context, produce the final, small, corrected answer:`;
     return ollamaService.generate({ system: systemPrompt, prompt: correctorPrompt, modelName }, onData);
 };
 
 export const generateDirectAnswer = async ({ query, historyText, trueData, modelName }: AnalysisParams, onData?: (chunk: any) => void) => {
-    const systemPrompt = `You are a data analyst. Answer the query very briefly and strightforward using only the TRUE_DATA and HISTORY. Avoid tips or extra text, Do not mention about TRUE_DATA, QUERY in the response. Do not print the entire TRUE_DATA, just use it to answer the query.
+    const systemPrompt = `You are a data analyst. Answer the query very briefly and strightforward using only the TRUE_DATA and HISTORY. Avoid tips or extra text, Do not mention about TRUE_DATA, QUERY in the response. Do not print the entire TRUE_DATA, just use it to answer the query in least words.
 
     TRUE_DATA :
     ${trueData}

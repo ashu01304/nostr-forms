@@ -1,4 +1,3 @@
-// packages/formstr-app/src/containers/ResponsesNew/components/AIAnalysisChat/style.ts
 import styled from 'styled-components';
 
 export const ChatWrapper = styled.div`
