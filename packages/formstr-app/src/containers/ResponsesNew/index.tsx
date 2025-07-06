@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Event, getPublicKey, nip19, SubCloser } from "nostr-tools";
 import { useParams, useSearchParams } from "react-router-dom";
 import { fetchFormResponses } from "../../nostr/responses";
 import SummaryStyle from "./summary.style";
-import { Button, Card, Divider, Table, Typography, Spin } from "antd";
+import { Button, Card, Divider, Table, Typography, Spin, Space } from "antd";
 import ResponseWrapper from "./Responses.style";
 import { isMobile } from "../../utils/utility";
 import { useProfileContext } from "../../hooks/useProfileContext";
@@ -16,6 +16,8 @@ import { useApplicationContext } from "../../hooks/useApplicationContext";
 import { ResponseDetailModal } from './components/ResponseDetailModal';
 import { getDefaultRelays } from "../../nostr/common";
 import { getResponseRelays, getInputsFromResponseEvent, getResponseLabels } from "../../utils/ResponseUtils";
+import { RobotOutlined } from "@ant-design/icons";
+import AIAnalysisChat from './components/AIAnalysisChat';
 
 const { Text } = Typography;
 
@@ -32,8 +34,16 @@ export const Response = () => {
   const [selectedEventForModal, setSelectedEventForModal] = useState<Event | null>(null);
   const [selectedResponseInputsForModal, setSelectedResponseInputsForModal] = useState<Tag[] | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isChatVisible, setIsChatVisible] = useState(false);
+  const chatRef = useRef<HTMLDivElement>(null);
   let { poolRef } = useApplicationContext();
   const [isFormSpecLoading, setIsFormSpecLoading] = useState(true); 
+
+  useEffect(() => {
+    if (isChatVisible && chatRef.current) {
+      chatRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [isChatVisible]);
 
   const handleResponseEvent = (event: Event) => {
     setResponses((prev: Event[] | undefined) => {
@@ -308,6 +318,8 @@ export const Response = () => {
             </div>;
   }
 
+  const hasResponses = responses && responses.length > 0;
+
   return (
     <div>
       <SummaryStyle>
@@ -325,7 +337,18 @@ export const Response = () => {
         </div>
       </SummaryStyle>
       <ResponseWrapper>
-        <Export responsesData={getData(true) || []} formName={getFormName()} />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '15px' }}>
+            <Space>
+                <Button
+                    icon={<RobotOutlined />}
+                    disabled={!hasResponses}
+                    onClick={() => setIsChatVisible(true)}
+                >
+                    AI Analysis
+                </Button>
+                <Export responsesData={getData(true) || []} formName={getFormName()} />
+            </Space>
+        </div>
         <div style={{ overflow: "scroll", marginBottom: 60 }}>
           <Table
             columns={getColumns()}
@@ -350,6 +373,16 @@ export const Response = () => {
               };
             }}
           />
+        </div>
+        <div ref={chatRef}>
+         {isChatVisible && formSpec && (
+            <AIAnalysisChat 
+                isVisible={isChatVisible}
+                onClose={() => setIsChatVisible(false)}
+                responsesData={getData(true)}
+                formSpec={formSpec}
+            />
+         )}
         </div>
       </ResponseWrapper>
       {isModalOpen &&
