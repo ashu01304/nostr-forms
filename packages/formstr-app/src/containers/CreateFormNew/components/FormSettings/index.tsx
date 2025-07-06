@@ -16,6 +16,11 @@ function FormSettings() {
     updateFormSetting,
     toggleRelayManagerModal,
     isRelayManagerModalOpen,
+    relayList,
+    addRelayToList,
+    editRelayInList,
+    deleteRelayFromList,
+    restoreFormRelaysToUserDefault,
   } = useFormBuilderContext();
 
   const handleAnonymousToggle = (checked: boolean) => {
@@ -116,6 +121,12 @@ function FormSettings() {
         <RelayManagerModal
           isOpen={isRelayManagerModalOpen}
           onClose={toggleRelayManagerModal}
+          relayList={relayList}
+          addRelayToList={addRelayToList}
+          editRelayInList={editRelayInList}
+          deleteRelayFromList={deleteRelayFromList}
+          onRestoreDefaults={restoreFormRelaysToUserDefault}
+          restoreButtonText="Restore from your defaults"
         />
       )}
     </StyleWrapper>
