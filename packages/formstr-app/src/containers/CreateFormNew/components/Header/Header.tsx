@@ -1,6 +1,6 @@
 import { Layout, Menu, Row, Col, Typography, MenuProps } from "antd";
 import { Link } from "react-router-dom";
-import { ArrowLeftOutlined, MenuOutlined, RocketOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, MenuOutlined } from "@ant-design/icons";
 import { HEADER_MENU, HEADER_MENU_KEYS } from "./config";
 import { Button } from "antd";
 import useFormBuilderContext from "../../hooks/useFormBuilderContext";
@@ -19,6 +19,10 @@ export const CreateFormHeader: React.FC = () => {
     useFormBuilderContext();
 
   const onMenuClickHandler: MenuProps["onClick"] = (e) => {
+    if (e.key === HEADER_MENU_KEYS.AI_BUILDER) {
+      setIsAiModalOpen(true);
+      return;
+    }
     if (e.key === HEADER_MENU_KEYS.BUILDER || e.key === HEADER_MENU_KEYS.PREVIEW) {
       setSelectedTab(e.key);
     }
@@ -43,10 +47,6 @@ export const CreateFormHeader: React.FC = () => {
     }
   };
 
-  const handleAiBuilderClick = () => {
-    setIsAiModalOpen(true);
-  };
-
   return (
     <StyleWrapper>
       <Header className="create-form-header">
@@ -66,14 +66,6 @@ export const CreateFormHeader: React.FC = () => {
 
           <Col md={10} xs={12} sm={12}>
             <Row className="header-row" justify="end" align="middle" gutter={[8, 0]}>
-              <Col>
-                <Button
-                  icon={<RocketOutlined />}
-                  onClick={handleAiBuilderClick}
-                >
-                  AI Builder
-                </Button>
-              </Col>
               <Col>
                 <Button
                   type="primary"
