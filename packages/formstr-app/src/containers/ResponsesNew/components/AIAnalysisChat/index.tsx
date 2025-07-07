@@ -7,13 +7,9 @@ import { ollamaService, OllamaModel } from '../../../../services/ollamaService';
 import ReactMarkdown from 'react-markdown';
 import ModelSelector from '../../../../components/ModelSelector';
 import OllamaSettings from '../../../../components/OllamaSettings';
-import { createAnalysisReport, generateDirectAnswer, generateDraftAnswer, refineAndCorrectAnswer } from './analysisHelper';
+import { createAnalysisReport, runAnalysis } from './analysisHelper';
 
 const { TextArea } = Input;
-
-const formatChatHistory = (history: Message[]): string => {
-    return history.map(msg => `${msg.sender === 'user' ? 'User' : 'Assistant'}: ${msg.text}`).join('\n');
-}
 
 const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, responsesData, formSpec }) => {
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
@@ -25,7 +21,6 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
   const [connectionStatus, setConnectionStatus] = useState<boolean | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [streamingText, setStreamingText] = useState('');
-  const initialAnalysisPerformed = useRef(false);
   const messageListRef = useRef<HTMLDivElement>(null);
   const trueDataRef = useRef<string>('');
   const initialConnectionDone = useRef(false);
@@ -35,7 +30,7 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
   }, [chatHistory, isAnalyzing, streamingText]);
-  
+
   const fetchModels = useCallback(async () => {
     setFetchingModels(true);
     const result = await ollamaService.fetchModels();
@@ -76,74 +71,56 @@ const AIAnalysisChat: React.FC<AIAnalysisChatProps> = ({ isVisible, onClose, res
   };
 
   useEffect(() => {
-    if (isVisible) {
-      if (!initialConnectionDone.current) {
+    if (isVisible && !initialConnectionDone.current) {
         trueDataRef.current = createAnalysisReport(responsesData, formSpec);
         setSelectedModel(ollamaService.getConfig().modelName);
         testConnection(false);
         initialConnectionDone.current = true;
-      }
-    } else {
-        initialAnalysisPerformed.current = false;
+    } else if (!isVisible) {
         initialConnectionDone.current = false;
         setChatHistory([]);
     }
   }, [isVisible, responsesData, formSpec, testConnection]);
 
   useEffect(() => {
-    const lastMessage = chatHistory[chatHistory.length - 1];
-    const isInitialCall = chatHistory.length === 0 && isVisible && !initialAnalysisPerformed.current && selectedModel && connectionStatus;
-    const isUserCall = lastMessage?.sender === 'user';
+    const shouldRun = (chatHistory.length === 0 && isVisible && connectionStatus) ||
+                      (chatHistory.length > 0 && chatHistory[chatHistory.length - 1].sender === 'user');
 
-    if (!isInitialCall && !isUserCall) return;
+    if (!shouldRun) return;
 
-    const runStreamingAnalysis = async () => {
+    const performAnalysis = async () => {
         setIsAnalyzing(true);
         setStreamingText('');
         let completeResponse = '';
 
-        const onData = (chunk: any) => {
-            if (chunk.response) {
-                const textChunk = chunk.response;
-                completeResponse += textChunk;
-                setStreamingText(prev => prev + textChunk);
-            }
-        };
-
         try {
-            if (isInitialCall) {
-                initialAnalysisPerformed.current = true;
-                const query = "Provide a general, concise analysis of the entire dataset. Start with the pre-computed summary, and conclude everything under 50 words";
-                const draftResult = await generateDraftAnswer({ query, historyText: "", trueData: trueDataRef.current, modelName: selectedModel });
-                if (!draftResult.success) throw new Error(draftResult.error);
-                
-                const draftAnswer = draftResult.data.response;
-                await refineAndCorrectAnswer({ query, historyText: "", trueData: trueDataRef.current, modelName: selectedModel, draftAnswer }, onData);
-
-                setChatHistory([{ sender: 'ai', text: completeResponse }]);
-
-            } else if (isUserCall) {
-                const query = lastMessage.text;
-                const historyForPrompt = chatHistory.slice(0, -1);
-                const historyText = formatChatHistory(historyForPrompt);
-                await generateDirectAnswer({ query, historyText, trueData: trueDataRef.current, modelName: selectedModel }, onData);
-
-                setChatHistory(prev => [...prev, { sender: 'ai', text: completeResponse }]);
-            }
+            await runAnalysis({
+                chatHistory: chatHistory,
+                trueData: trueDataRef.current,
+                modelName: selectedModel,
+                onData: (chunk: any) => {
+                    if (chunk.response) {
+                        const textChunk = chunk.response;
+                        completeResponse += textChunk;
+                        setStreamingText(prev => prev + textChunk);
+                    }
+                },
+            });
+            const finalMessage = { sender: 'ai' as const, text: completeResponse };
+            setChatHistory(prev => [...prev, finalMessage]);
         } catch (e: any) {
             message.error(e.message || 'An error occurred during analysis.');
             const errorMessage = { sender: 'ai' as const, text: `Sorry, an error occurred: ${e.message}` };
-            if (isInitialCall) setChatHistory([errorMessage]);
-            else setChatHistory(prev => [...prev, errorMessage]);
+            setChatHistory(prev => [...prev, errorMessage]);
         } finally {
             setIsAnalyzing(false);
             setStreamingText('');
         }
     };
 
-    runStreamingAnalysis();
-  }, [chatHistory, isVisible, selectedModel, connectionStatus]);
-  
+    performAnalysis();
+  }, [chatHistory, isVisible, connectionStatus, selectedModel]);
+
   const getButtonProps = () => {
     if (connectionStatus === true) return { className: 'ai-chat-button-success' };
     if (connectionStatus === false) return { className: 'ai-chat-button-danger' };

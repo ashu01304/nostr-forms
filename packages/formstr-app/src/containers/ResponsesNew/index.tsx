@@ -3,21 +3,20 @@ import { Event, getPublicKey, nip19, SubCloser } from "nostr-tools";
 import { useParams, useSearchParams } from "react-router-dom";
 import { fetchFormResponses } from "../../nostr/responses";
 import SummaryStyle from "./summary.style";
-import { Button, Card, Divider, Table, Typography, Spin, Space } from "antd";
+import { Button, Card, Divider, Table, Typography, Spin } from "antd";
 import ResponseWrapper from "./Responses.style";
 import { isMobile } from "../../utils/utility";
 import { useProfileContext } from "../../hooks/useProfileContext";
 import { fetchFormTemplate } from "../../nostr/fetchFormTemplate";
 import { hexToBytes } from "@noble/hashes/utils";
 import { fetchKeys, getAllowedUsers, getFormSpec as getFormSpecFromEventUtil } from "../../utils/formUtils"; 
-import { Export } from "./Export";
 import { Field, Tag } from "../../nostr/types";
 import { useApplicationContext } from "../../hooks/useApplicationContext";
 import { ResponseDetailModal } from './components/ResponseDetailModal';
 import { getDefaultRelays } from "../../nostr/common";
 import { getResponseRelays, getInputsFromResponseEvent, getResponseLabels } from "../../utils/ResponseUtils";
-import { RobotOutlined } from "@ant-design/icons";
 import AIAnalysisChat from './components/AIAnalysisChat';
+import { ResponseHeader } from "./components/ResponseHeader";
 
 const { Text } = Typography;
 
@@ -337,18 +336,12 @@ export const Response = () => {
         </div>
       </SummaryStyle>
       <ResponseWrapper>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '15px' }}>
-            <Space>
-                <Button
-                    icon={<RobotOutlined />}
-                    disabled={!hasResponses}
-                    onClick={() => setIsChatVisible(true)}
-                >
-                    AI Analysis
-                </Button>
-                <Export responsesData={getData(true) || []} formName={getFormName()} />
-            </Space>
-        </div>
+        <ResponseHeader
+          hasResponses={!!hasResponses}
+          onAiAnalysisClick={() => setIsChatVisible(true)}
+          responsesData={getData(true) || []}
+          formName={getFormName()}
+        />
         <div style={{ overflow: "scroll", marginBottom: 60 }}>
           <Table
             columns={getColumns()}

@@ -1,5 +1,6 @@
 import { ollamaService } from "../../../../services/ollamaService";
 import { Field, Tag } from "../../../../nostr/types";
+import { Message } from "./types";
 
 const createFieldMap = (formSpec: Tag[]): Map<string, Field> => {
     const map = new Map<string, Field>();
@@ -73,7 +74,7 @@ interface AnalysisParams {
     modelName?: string;
 }
 
-export const generateDraftAnswer = async ({ query, historyText, trueData, modelName }: AnalysisParams) => {
+const generateDraftAnswer = async ({ query, historyText, trueData, modelName }: AnalysisParams) => {
     const systemPrompt = `You are a data analyst. Using the TRUE_DATA, generate a very small and strightforward analysis of important things. NO EXTRA TEXT OR INSIGHT. Do not mention about TRUE_DATA, QUERY in the response. Do not print the entire TRUE_DATA.
 
     TRUE_DATA :
@@ -88,7 +89,7 @@ export const generateDraftAnswer = async ({ query, historyText, trueData, modelN
     return result;
 };
 
-export const refineAndCorrectAnswer = async ({ query, trueData, modelName, draftAnswer }: AnalysisParams & { draftAnswer: string }, onData?: (chunk: any) => void) => {
+const refineAndCorrectAnswer = async ({ query, trueData, modelName, draftAnswer }: AnalysisParams & { draftAnswer: string }, onData?: (chunk: any) => void) => {
     const systemPrompt = `You are a fact-checker. check the DRAFT_ANSWER using the TRUE_DATA and QUERY. Correct if needed. Avoid extra text, remove if some data is irrelevent and provide the final result, do not mention about TRUE_DATA, QUERY in the response .
 
     TRUE_DATA :
@@ -97,14 +98,14 @@ export const refineAndCorrectAnswer = async ({ query, trueData, modelName, draft
     QUERY :
     ${query}
 
-    Final Answwer: your strightforward, informative and short complete response for user. In least wordes, no extra text, no tips, no explanation, just the answer.
+    Final Answwer: your strightforward, informative and short complete response for user. In least words, no extra text, no tips, no explanation, just the answer.
     `;
     
     const correctorPrompt = `DRAFT_ANSWER : \n${draftAnswer}\n\nBased on all context, produce the final, small, corrected answer:`;
     return ollamaService.generate({ system: systemPrompt, prompt: correctorPrompt, modelName }, onData);
 };
 
-export const generateDirectAnswer = async ({ query, historyText, trueData, modelName }: AnalysisParams, onData?: (chunk: any) => void) => {
+const generateDirectAnswer = async ({ query, historyText, trueData, modelName }: AnalysisParams, onData?: (chunk: any) => void) => {
     const systemPrompt = `You are a data analyst. Answer the query very briefly and strightforward using only the TRUE_DATA and HISTORY. Avoid tips or extra text, Do not mention about TRUE_DATA, QUERY in the response. Do not print the entire TRUE_DATA, just use it to answer the query in least words.
 
     TRUE_DATA :
@@ -114,4 +115,31 @@ export const generateDirectAnswer = async ({ query, historyText, trueData, model
     ${historyText}
     `;
     return ollamaService.generate({ system: systemPrompt, prompt: query, modelName }, onData);
+};
+
+const formatChatHistory = (history: Message[]): string => {
+    return history.map(msg => `${msg.sender === 'user' ? 'User' : 'Assistant'}: ${msg.text}`).join('\n');
+}
+
+interface RunAnalysisParams {
+    chatHistory: Message[];
+    trueData: string;
+    modelName?: string;
+    onData: (chunk: any) => void;
+}
+
+export const runAnalysis = async ({ chatHistory, trueData, modelName, onData }: RunAnalysisParams) => {
+    const lastMessage = chatHistory[chatHistory.length - 1];
+    const isInitialCall = chatHistory.length === 0;
+
+    if (isInitialCall) {
+        const query = "Provide a general, concise analysis of the entire dataset. Start with the pre-computed summary, and conclude everything under 50 words";
+        const draftResult = await generateDraftAnswer({ query, historyText: "", trueData, modelName });
+        const draftAnswer = draftResult.data.response;
+        await refineAndCorrectAnswer({ query, trueData, modelName, draftAnswer, historyText: "" }, onData);
+    } else if (lastMessage?.sender === 'user') {
+        const query = lastMessage.text;
+        const historyText = formatChatHistory(chatHistory.slice(0, -1));
+        await generateDirectAnswer({ query, historyText, trueData, modelName }, onData);
+    }
 };
