@@ -5,12 +5,17 @@ import React, {
   FC,
   ReactNode,
   useEffect,
+  useRef,
 } from "react";
 import { LOCAL_STORAGE_KEYS, getItem, setItem } from "../utils/localStorage";
-import { Modal } from "antd";
+import { Button, Modal } from "antd";
 import { Filter } from "nostr-tools";
 import { useApplicationContext } from "../hooks/useApplicationContext";
 import { getDefaultRelays } from "../nostr/common";
+import { BunkerSigner, parseBunkerInput, BunkerPointer, toBunkerURL } from "nostr-tools/nip46";
+import Nip46Login from "../components/Nip46Login";
+
+const originalNostr = window.nostr;
 
 interface ProfileProviderProps {
   children?: ReactNode;
@@ -33,10 +38,47 @@ export const ProfileContext = createContext<ProfileContextType | undefined>(
 
 export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
   const [pubkey, setPubkey] = useState<string | undefined>(undefined);
-  const [usingNip07, setUsingNip07] = useState(false);
   const [userRelays, setUserRelays] = useState<string[]>([]);
+  const [loginChoiceModal, setLoginChoiceModal] = useState(false);
+  const [nip46Modal, setNip46Modal] = useState(false);
+  const bunkerSignerRef = useRef<BunkerSigner | null>(null);
 
   const { poolRef } = useApplicationContext();
+
+  const createBunkerAdapter = (signer: BunkerSigner) => ({
+    getPublicKey: () => signer.getPublicKey(),
+    signEvent: (event: any) => signer.signEvent(event),
+    nip04: {
+      encrypt: (pubkey: string, plaintext: string) => signer.nip04Encrypt(pubkey, plaintext),
+      decrypt: (pubkey: string, ciphertext: string) => signer.nip04Decrypt(pubkey, ciphertext),
+    },
+    nip44: {
+      encrypt: (pubkey: string, plaintext: string) => signer.nip44Encrypt(pubkey, plaintext),
+      decrypt: (pubkey: string, ciphertext: string) => signer.nip44Decrypt(pubkey, ciphertext),
+    },
+    getRelays: () => {
+      if (signer.bp.relays && signer.bp.relays.length > 0) {
+        return signer.bp.relays.reduce((acc, relayUrl) => {
+          acc[relayUrl] = { read: true, write: true };
+          return acc;
+        }, {} as { [url: string]: { read: boolean, write: boolean } });
+      }
+      return {};
+    },
+  });
+
+  const handleNip46Login = async (signer: BunkerSigner, bunkerPointer: BunkerPointer) => {
+    bunkerSignerRef.current = signer;
+    console.log('[NIP46] Login successful. Getting public key...');
+    const bunkerPubkey = await signer.getPublicKey();
+    console.log('[NIP46] Public key obtained:', bunkerPubkey);
+    setPubkey(bunkerPubkey);
+    setItem(LOCAL_STORAGE_KEYS.PROFILE, { pubkey: bunkerPubkey });
+    setItem(LOCAL_STORAGE_KEYS.LOGIN_METHOD, "nip46", { parseAsJson: false });
+    setItem(LOCAL_STORAGE_KEYS.BUNKER_URL, toBunkerURL(bunkerPointer), { parseAsJson: false });
+    window.nostr = createBunkerAdapter(signer) as any;
+    setNip46Modal(false);
+  };
 
   const fetchUserRelays = async (pubkey: string) => {
     if (!poolRef) return;
@@ -52,28 +94,87 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
     setUserRelays(relayUrls);
   };
 
-  useEffect(() => {
+  const attemptAutoLogin = async () => {
     const profile = getItem<IProfile>(LOCAL_STORAGE_KEYS.PROFILE);
     if (profile) {
-      setPubkey(profile.pubkey);
-      fetchUserRelays(profile.pubkey);
+      console.log('[AutoLogin] Found profile:', profile.pubkey);
+      const loginMethod = getItem<string>(LOCAL_STORAGE_KEYS.LOGIN_METHOD, { parseAsJson: false });
+      
+      if (loginMethod === 'nip46') {
+        console.log('[AutoLogin] NIP-46 method detected.');
+        const bunkerUrl = getItem<string>(LOCAL_STORAGE_KEYS.BUNKER_URL, { parseAsJson: false });
+        if (bunkerUrl) {
+          console.log('[AutoLogin] Attempting to reconnect to bunker:', bunkerUrl);
+          try {
+            const bunkerPointer = await parseBunkerInput(bunkerUrl);
+            if (bunkerPointer) {
+              const clientSecretKey = new Uint8Array(32);
+              window.crypto.getRandomValues(clientSecretKey);
+              const signer = new BunkerSigner(clientSecretKey, bunkerPointer, {
+                onauth: (url: string) => {
+                  console.log('[AutoLogin] Re-authentication required. Please log in again manually.');
+                }
+              });
+              await signer.connect();
+              bunkerSignerRef.current = signer;
+              window.nostr = createBunkerAdapter(signer) as any;
+              console.log('[AutoLogin] NIP-46 auto-login successful.');
+              setPubkey(profile.pubkey);
+              fetchUserRelays(profile.pubkey);
+            }
+          } catch (e) {
+            console.error('[AutoLogin] NIP-46 auto-login failed:', e);
+          }
+        }
+      } else {
+        console.log('[AutoLogin] NIP-07 method detected.');
+        setPubkey(profile.pubkey);
+        fetchUserRelays(profile.pubkey);
+      }
     } else {
-      console.log("Couldn't find npub");
+      console.log('[AutoLogin] No profile found in localStorage.');
     }
-  }, [poolRef]);
+  };
+
+  useEffect(() => {
+    attemptAutoLogin();
+  }, []);
 
   const logout = () => {
+    if (bunkerSignerRef.current) {
+      console.log('[Logout] Closing NIP-46 signer connection.');
+      bunkerSignerRef.current.close();
+      bunkerSignerRef.current = null;
+    }
     setItem(LOCAL_STORAGE_KEYS.PROFILE, null);
+    setItem(LOCAL_STORAGE_KEYS.LOGIN_METHOD, null);
+    setItem(LOCAL_STORAGE_KEYS.BUNKER_URL, null);
     setPubkey(undefined);
+    window.nostr = originalNostr;
+    console.log('[Logout] User logged out.');
   };
 
   const requestPubkey = async () => {
-    setUsingNip07(true);
-    let publicKey = await window.nostr.getPublicKey();
-    setPubkey(publicKey);
-    setItem(LOCAL_STORAGE_KEYS.PROFILE, { pubkey: publicKey });
-    setUsingNip07(false);
-    return pubkey;
+    setLoginChoiceModal(true);
+  };
+  
+  const handleNip07Login = async () => {
+    setLoginChoiceModal(false);
+    if (originalNostr) {
+      window.nostr = originalNostr;
+      try {
+        const publicKey = await window.nostr.getPublicKey();
+        setPubkey(publicKey);
+        setItem(LOCAL_STORAGE_KEYS.PROFILE, { pubkey: publicKey });
+        setItem(LOCAL_STORAGE_KEYS.LOGIN_METHOD, "nip07", { parseAsJson: false });
+        console.log('[NIP07] Login successful:', publicKey);
+      } catch (e) {
+        console.error('[NIP07] Login failed:', e);
+        alert("NIP-07 login failed. Please check your extension.");
+      }
+    } else {
+      alert("NIP-07 extension not found.");
+    }
   };
 
   return (
@@ -82,20 +183,23 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
     >
       {children}
       <Modal
-        open={usingNip07}
+        open={loginChoiceModal}
+        onCancel={() => setLoginChoiceModal(false)}
         footer={null}
-        onCancel={() => setUsingNip07(false)}
+        title="Choose Login Method"
       >
-        {" "}
-        Check your NIP07 Extension. If you do not have one, or wish to read
-        more, checkout these{" "}
-        <a
-          href="https://github.com/aljazceru/awesome-nostr?tab=readme-ov-file#nip-07-browser-extensions"
-          target="_blank noreferrer"
-        >
-          Awesome Nostr Recommendations
-        </a>
+        <Button type="primary" block onClick={handleNip07Login} style={{ marginBottom: 10 }}>
+          Use Browser Extension (NIP-07)
+        </Button>
+        <Button block onClick={() => { setLoginChoiceModal(false); setNip46Modal(true); }}>
+          Use Remote Signer (NIP-46)
+        </Button>
       </Modal>
+      <Nip46Login 
+        isOpen={nip46Modal}
+        onClose={() => setNip46Modal(false)}
+        onLogin={handleNip46Login}
+      />
     </ProfileContext.Provider>
   );
 };

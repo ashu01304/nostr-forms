@@ -6,6 +6,8 @@ export const LOCAL_STORAGE_KEYS = {
   SUBMISSIONS: "formstr:submissions",
   PROFILE: "formstr:profile",
   OLLAMA_CONFIG: "formstr:ollama_config",
+  LOGIN_METHOD: "formstr:login_method",
+  BUNKER_URL: "formstr:bunker_url",
 };
 
 export function getItem<T>(key: string, { parseAsJson = true } = {}): T | null {

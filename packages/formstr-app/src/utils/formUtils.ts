@@ -3,7 +3,7 @@ import { makeTag } from "./utility";
 import { getDefaultRelays } from "@formstr/sdk";
 import { Tag } from "@formstr/sdk/dist/formstr/nip101";
 import { nip44, Event, UnsignedEvent, SimplePool, nip19 } from "nostr-tools";
-import { bytesToHex } from "@noble/hashes/utils";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
 import { naddrUrl } from "./utility";
 import { AddressPointer } from "nostr-tools/nip19";
@@ -114,7 +114,7 @@ export const getFormSpec = async (
 
 export const getDecryptedForm = (formEvent: Event, viewKey: string) => {
   const conversationKey = nip44.v2.utils.getConversationKey(
-    viewKey,
+    hexToBytes(viewKey),
     formEvent.pubkey,
   );
   const formSpecString = nip44.v2.decrypt(formEvent.content, conversationKey);

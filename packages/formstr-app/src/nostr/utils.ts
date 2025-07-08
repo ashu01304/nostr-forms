@@ -8,7 +8,7 @@ export const nip44Encrypt = (
 ) => {
   console.log("secret, pub", privKey, pubkey);
   const conversationKey = nip44.v2.utils.getConversationKey(
-    bytesToHex(privKey),
+    privKey,
     pubkey,
   );
   const cipherText = nip44.v2.encrypt(message, conversationKey);
