@@ -14,6 +14,8 @@ import { useApplicationContext } from "../hooks/useApplicationContext";
 import { getDefaultRelays } from "../nostr/common";
 import { BunkerSigner, parseBunkerInput, BunkerPointer, toBunkerURL } from "nostr-tools/nip46";
 import Nip46Login from "../components/Nip46Login";
+import { nip07Signer } from "../signer/Nip07Signer";
+import { createNip46Signer } from "../signer/Nip46Signer";
 
 // Keep a reference to the original NIP-07 signer if it exists
 const originalNostr = window.nostr;
@@ -46,28 +48,6 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
 
   const { poolRef } = useApplicationContext();
 
-  const createBunkerAdapter = (signer: BunkerSigner) => ({
-    getPublicKey: () => signer.getPublicKey(),
-    signEvent: (event: any) => signer.signEvent(event),
-    nip04: {
-      encrypt: (pubkey: string, plaintext: string) => signer.nip04Encrypt(pubkey, plaintext),
-      decrypt: (pubkey: string, ciphertext: string) => signer.nip04Decrypt(pubkey, ciphertext),
-    },
-    nip44: {
-      encrypt: (pubkey: string, plaintext: string) => signer.nip44Encrypt(pubkey, plaintext),
-      decrypt: (pubkey: string, ciphertext: string) => signer.nip44Decrypt(pubkey, ciphertext),
-    },
-    getRelays: () => {
-      if (signer.bp.relays && signer.bp.relays.length > 0) {
-        return signer.bp.relays.reduce((acc, relayUrl) => {
-          acc[relayUrl] = { read: true, write: true };
-          return acc;
-        }, {} as { [url: string]: { read: boolean, write: boolean } });
-      }
-      return {};
-    },
-  });
-
   const handleNip46Login = async (signer: BunkerSigner, bunkerPointer: BunkerPointer) => {
     bunkerSignerRef.current = signer;
     const bunkerPubkey = await signer.getPublicKey();
@@ -75,7 +55,7 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
     setItem(LOCAL_STORAGE_KEYS.PROFILE, { pubkey: bunkerPubkey });
     setItem(LOCAL_STORAGE_KEYS.LOGIN_METHOD, "nip46", { parseAsJson: false });
     setItem(LOCAL_STORAGE_KEYS.BUNKER_URL, toBunkerURL(bunkerPointer), { parseAsJson: false });
-    window.nostr = createBunkerAdapter(signer) as any;
+    window.nostr = createNip46Signer(signer) as any;
     setNip46Modal(false);
   };
 
@@ -112,7 +92,7 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
               });
               await signer.connect();
               bunkerSignerRef.current = signer;
-              window.nostr = createBunkerAdapter(signer) as any;
+              window.nostr = createNip46Signer(signer) as any;
               setPubkey(profile.pubkey);
               fetchUserRelays(profile.pubkey);
             }
@@ -150,7 +130,7 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
   const handleNip07Login = async () => {
     setLoginChoiceModal(false);
     if (originalNostr) {
-      window.nostr = originalNostr;
+      window.nostr = nip07Signer as any;
       try {
         const publicKey = await window.nostr.getPublicKey();
         setPubkey(publicKey);
