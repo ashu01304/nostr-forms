@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, Input, Button, Spin, Alert } from 'antd';
 import { BunkerSigner, parseBunkerInput, BunkerPointer } from 'nostr-tools/nip46';
+import { getNip46ClientSecret } from '../../utils/localStorage';
 
 interface Nip46LoginProps {
   isOpen: boolean;
@@ -27,8 +28,7 @@ const Nip46Login: React.FC<Nip46LoginProps> = ({ isOpen, onClose, onLogin }) => 
         throw new Error('Invalid bunker URL or NIP-05 identifier.');
       }
 
-      const clientSecretKey = new Uint8Array(32);
-      window.crypto.getRandomValues(clientSecretKey);
+      const clientSecretKey = getNip46ClientSecret();
 
       const signer = new BunkerSigner(clientSecretKey, bunkerPointer, {
         onauth: (url: string) => {

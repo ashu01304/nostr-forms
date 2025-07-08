@@ -7,7 +7,7 @@ import React, {
   useEffect,
   useRef,
 } from "react";
-import { LOCAL_STORAGE_KEYS, getItem, setItem } from "../utils/localStorage";
+import { LOCAL_STORAGE_KEYS, getItem, setItem, getNip46ClientSecret } from "../utils/localStorage";
 import { Button, Modal } from "antd";
 import { Filter } from "nostr-tools";
 import { useApplicationContext } from "../hooks/useApplicationContext";
@@ -104,8 +104,7 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
           try {
             const bunkerPointer = await parseBunkerInput(bunkerUrl);
             if (bunkerPointer) {
-              const clientSecretKey = new Uint8Array(32);
-              window.crypto.getRandomValues(clientSecretKey);
+              const clientSecretKey = getNip46ClientSecret();
               const signer = new BunkerSigner(clientSecretKey, bunkerPointer, {
                 onauth: (url: string) => {
                   // Silently wait for re-authentication if required
