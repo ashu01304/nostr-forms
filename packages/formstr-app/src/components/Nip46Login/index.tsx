@@ -20,31 +20,23 @@ const Nip46Login: React.FC<Nip46LoginProps> = ({ isOpen, onClose, onLogin }) => 
     }
     setLoading(true);
     setError('');
-    console.log('[NIP46] Starting connection process...');
 
     try {
-      console.log(`[NIP46] Parsing input: ${bunkerInput}`);
       const bunkerPointer = await parseBunkerInput(bunkerInput);
       if (!bunkerPointer) {
         throw new Error('Invalid bunker URL or NIP-05 identifier.');
       }
-      console.log('[NIP46] Bunker pointer parsed:', bunkerPointer);
 
       const clientSecretKey = new Uint8Array(32);
       window.crypto.getRandomValues(clientSecretKey);
-      console.log('[NIP46] Client secret key generated.');
 
       const signer = new BunkerSigner(clientSecretKey, bunkerPointer, {
         onauth: (url: string) => {
-          // Log for debugging, but take no UI action.
-          console.log('[NIP46] Auth URL received (user must approve manually in their signer):', url);
         },
       });
-      console.log('[NIP46] BunkerSigner created. Attempting to connect to bunker...');
 
       await signer.connect();
       
-      console.log('[NIP46] Connection successful.');
       onLogin(signer, bunkerPointer);
 
     } catch (err: any) {

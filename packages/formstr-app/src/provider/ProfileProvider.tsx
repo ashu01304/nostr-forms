@@ -15,6 +15,7 @@ import { getDefaultRelays } from "../nostr/common";
 import { BunkerSigner, parseBunkerInput, BunkerPointer, toBunkerURL } from "nostr-tools/nip46";
 import Nip46Login from "../components/Nip46Login";
 
+// Keep a reference to the original NIP-07 signer if it exists
 const originalNostr = window.nostr;
 
 interface ProfileProviderProps {
@@ -69,9 +70,7 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
 
   const handleNip46Login = async (signer: BunkerSigner, bunkerPointer: BunkerPointer) => {
     bunkerSignerRef.current = signer;
-    console.log('[NIP46] Login successful. Getting public key...');
     const bunkerPubkey = await signer.getPublicKey();
-    console.log('[NIP46] Public key obtained:', bunkerPubkey);
     setPubkey(bunkerPubkey);
     setItem(LOCAL_STORAGE_KEYS.PROFILE, { pubkey: bunkerPubkey });
     setItem(LOCAL_STORAGE_KEYS.LOGIN_METHOD, "nip46", { parseAsJson: false });
@@ -97,14 +96,11 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
   const attemptAutoLogin = async () => {
     const profile = getItem<IProfile>(LOCAL_STORAGE_KEYS.PROFILE);
     if (profile) {
-      console.log('[AutoLogin] Found profile:', profile.pubkey);
       const loginMethod = getItem<string>(LOCAL_STORAGE_KEYS.LOGIN_METHOD, { parseAsJson: false });
       
       if (loginMethod === 'nip46') {
-        console.log('[AutoLogin] NIP-46 method detected.');
         const bunkerUrl = getItem<string>(LOCAL_STORAGE_KEYS.BUNKER_URL, { parseAsJson: false });
         if (bunkerUrl) {
-          console.log('[AutoLogin] Attempting to reconnect to bunker:', bunkerUrl);
           try {
             const bunkerPointer = await parseBunkerInput(bunkerUrl);
             if (bunkerPointer) {
@@ -112,13 +108,12 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
               window.crypto.getRandomValues(clientSecretKey);
               const signer = new BunkerSigner(clientSecretKey, bunkerPointer, {
                 onauth: (url: string) => {
-                  console.log('[AutoLogin] Re-authentication required. Please log in again manually.');
+                  // Silently wait for re-authentication if required
                 }
               });
               await signer.connect();
               bunkerSignerRef.current = signer;
               window.nostr = createBunkerAdapter(signer) as any;
-              console.log('[AutoLogin] NIP-46 auto-login successful.');
               setPubkey(profile.pubkey);
               fetchUserRelays(profile.pubkey);
             }
@@ -127,12 +122,9 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
           }
         }
       } else {
-        console.log('[AutoLogin] NIP-07 method detected.');
         setPubkey(profile.pubkey);
         fetchUserRelays(profile.pubkey);
       }
-    } else {
-      console.log('[AutoLogin] No profile found in localStorage.');
     }
   };
 
@@ -142,7 +134,6 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
 
   const logout = () => {
     if (bunkerSignerRef.current) {
-      console.log('[Logout] Closing NIP-46 signer connection.');
       bunkerSignerRef.current.close();
       bunkerSignerRef.current = null;
     }
@@ -151,7 +142,6 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
     setItem(LOCAL_STORAGE_KEYS.BUNKER_URL, null);
     setPubkey(undefined);
     window.nostr = originalNostr;
-    console.log('[Logout] User logged out.');
   };
 
   const requestPubkey = async () => {
@@ -167,7 +157,6 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
         setPubkey(publicKey);
         setItem(LOCAL_STORAGE_KEYS.PROFILE, { pubkey: publicKey });
         setItem(LOCAL_STORAGE_KEYS.LOGIN_METHOD, "nip07", { parseAsJson: false });
-        console.log('[NIP07] Login successful:', publicKey);
       } catch (e) {
         console.error('[NIP07] Login failed:', e);
         alert("NIP-07 login failed. Please check your extension.");
