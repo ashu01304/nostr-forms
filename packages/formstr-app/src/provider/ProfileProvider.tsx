@@ -12,7 +12,7 @@ import { Button, Modal } from "antd";
 import { Filter } from "nostr-tools";
 import { useApplicationContext } from "../hooks/useApplicationContext";
 import { getDefaultRelays } from "../nostr/common";
-import { BunkerSigner, parseBunkerInput, BunkerPointer, toBunkerURL } from "nostr-tools/nip46";
+import { BunkerSigner, parseBunkerInput, BunkerPointer } from "nostr-tools/nip46";
 import Nip46Login from "../components/Nip46Login";
 import { nip07Signer } from "../signer/Nip07Signer";
 import { createNip46Signer } from "../signer/Nip46Signer";
@@ -48,13 +48,13 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
 
   const { poolRef } = useApplicationContext();
 
-  const handleNip46Login = async (signer: BunkerSigner, bunkerPointer: BunkerPointer) => {
+  const handleNip46Login = async (signer: BunkerSigner, bunkerUrl: string) => {
     bunkerSignerRef.current = signer;
     const bunkerPubkey = await signer.getPublicKey();
     setPubkey(bunkerPubkey);
     setItem(LOCAL_STORAGE_KEYS.PROFILE, { pubkey: bunkerPubkey });
     setItem(LOCAL_STORAGE_KEYS.LOGIN_METHOD, "nip46", { parseAsJson: false });
-    setItem(LOCAL_STORAGE_KEYS.BUNKER_URL, toBunkerURL(bunkerPointer), { parseAsJson: false });
+    setItem(LOCAL_STORAGE_KEYS.BUNKER_URL, bunkerUrl, { parseAsJson: false });
     window.nostr = createNip46Signer(signer) as any;
     setNip46Modal(false);
   };
@@ -166,7 +166,7 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
       <Nip46Login 
         isOpen={nip46Modal}
         onClose={() => setNip46Modal(false)}
-        onLogin={handleNip46Login}
+        onLogin={(signer) => handleNip46Login(signer, (document.querySelector('input[placeholder="bunker://... or name@domain.com"]') as HTMLInputElement)?.value)}
       />
     </ProfileContext.Provider>
   );

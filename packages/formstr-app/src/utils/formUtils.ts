@@ -114,7 +114,7 @@ export const getFormSpec = async (
 
 export const getDecryptedForm = (formEvent: Event, viewKey: string) => {
   const conversationKey = nip44.v2.utils.getConversationKey(
-    hexToBytes(viewKey),
+    viewKey,
     formEvent.pubkey,
   );
   const formSpecString = nip44.v2.decrypt(formEvent.content, conversationKey);

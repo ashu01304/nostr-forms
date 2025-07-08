@@ -22,7 +22,7 @@ export const getInputsFromResponseEvent = (
   } else if (editKey) {
     try {
       const conversationKey = nip44.v2.utils.getConversationKey(
-        hexToBytes(editKey),
+        editKey,
         responseEvent.pubkey
       );
       const decryptedContent = nip44.v2.decrypt(

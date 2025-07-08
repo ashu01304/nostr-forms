@@ -6,7 +6,7 @@ import { getNip46ClientSecret } from '../../utils/localStorage';
 interface Nip46LoginProps {
   isOpen: boolean;
   onClose: () => void;
-  onLogin: (signer: BunkerSigner, bunkerPointer: BunkerPointer) => void;
+  onLogin: (signer: BunkerSigner, bunkerUrl: string) => void;
 }
 
 const Nip46Login: React.FC<Nip46LoginProps> = ({ isOpen, onClose, onLogin }) => {
@@ -37,7 +37,7 @@ const Nip46Login: React.FC<Nip46LoginProps> = ({ isOpen, onClose, onLogin }) => 
 
       await signer.connect();
       
-      onLogin(signer, bunkerPointer);
+      onLogin(signer, bunkerInput);
 
     } catch (err: any) {
       console.error('[NIP46] Connection failed:', err);

@@ -1,10 +1,17 @@
+import { UnsignedEvent } from "nostr-tools";
 import { BunkerSigner } from "nostr-tools/nip46";
 import { NostrSigner } from "./types";
 
 export function createNip46Signer(signer: BunkerSigner): NostrSigner {
   return {
     getPublicKey: () => signer.getPublicKey(),
-    signEvent: (event) => signer.signEvent(event),
+    async signEvent(event) {
+      const unsignedEvent: UnsignedEvent = {
+        ...event,
+        pubkey: await this.getPublicKey(),
+      };
+      return signer.signEvent(unsignedEvent);
+    },
     nip04: {
       encrypt: (pubkey, plaintext) => signer.nip04Encrypt(pubkey, plaintext),
       decrypt: (pubkey, ciphertext) => signer.nip04Decrypt(pubkey, ciphertext),
