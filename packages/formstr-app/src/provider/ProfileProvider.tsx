@@ -26,7 +26,7 @@ export interface ProfileContextType {
   userRelays: string[];
   isGlobalRelayModalOpen: boolean;
   toggleGlobalRelayModal: () => void;
-  updateUserRelays: (newRelays: string[]) => void;
+  updateUserRelays: (newRelays: string[]) => Promise<void>;
   restoreToAppDefaults: () => void;
 }
 
@@ -94,6 +94,7 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
   };
 
   const updateUserRelays = async (newRelays: string[]) => {
+    const oldRelays = [...userRelays];
     setUserRelays(newRelays);
     message.success("Default relays updated.");
 
@@ -114,17 +115,19 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
       
       const signedEvent = await window.nostr.signEvent(event);
       const pool = new SimplePool();
-      await Promise.allSettled(pool.publish(newRelays, signedEvent));
-      pool.close(newRelays);
+      await Promise.allSettled(pool.publish(getDefaultRelays(), signedEvent));
+      pool.close(getDefaultRelays());
       message.success("Relay list published to Nostr!");
     } catch (error) {
       console.error("Failed to publish NIP-65 event", error);
       message.error("Failed to publish relay list to Nostr.");
+      setUserRelays(oldRelays);
+      throw error;
     }
   };
 
   const restoreToAppDefaults = () => {
-    updateUserRelays(getDefaultRelays());
+    updateUserRelays(getDefaultRelays()).catch(() => {});
   };
 
   const handleAddRelay = (url: string) => {
@@ -132,7 +135,7 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
       message.warning('Relay already exists.');
       return;
     }
-    updateUserRelays([...userRelays, url]);
+    updateUserRelays([...userRelays, url]).catch(() => {});
   };
 
   const handleEditRelay = (tempId: string, newUrl: string) => {
@@ -140,13 +143,13 @@ export const ProfileProvider: FC<ProfileProviderProps> = ({ children }) => {
     if (relayIndex !== -1) {
       const updatedRelays = [...userRelays];
       updatedRelays[relayIndex] = newUrl;
-      updateUserRelays(updatedRelays);
+      updateUserRelays(updatedRelays).catch(() => {});
     }
   };
 
   const handleDeleteRelay = (tempId: string) => {
     const updatedRelays = userRelays.filter(url => url !== tempId);
-    updateUserRelays(updatedRelays);
+    updateUserRelays(updatedRelays).catch(() => {});
   };
 
   const relayItems: RelayItem[] = userRelays.map(url => ({ url, tempId: url }));

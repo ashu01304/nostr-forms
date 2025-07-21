@@ -78,8 +78,8 @@ export const NostrHeader = () => {
   if (pubkey) {
     dropdownMenuItems.push(
       {
-        key: "relaySettings",
-        label: "Relay Settings",
+        key: "settings",
+        label: "Settings",
         icon: <SettingOutlined />,
         onClick: toggleGlobalRelayModal,
       },
